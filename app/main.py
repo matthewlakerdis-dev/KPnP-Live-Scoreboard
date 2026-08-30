@@ -19,8 +19,8 @@ if sys.platform == "win32":
 from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardPaths, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout,
-    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-    QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
+    QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
+    QScrollArea, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
@@ -469,7 +469,7 @@ class CollapsibleSection(QWidget):
         layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(4)
         self.toggle=QToolButton(text=title,checkable=True,checked=True)
         self.toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); self.toggle.setArrowType(Qt.DownArrow)
-        self.toggle.setStyleSheet("QToolButton{font-weight:700;text-align:left;padding:7px 9px;border:1px solid #3d4147;border-radius:4px;background:#242629;} QToolButton:hover{background:#30343a;}")
+        self.toggle.setObjectName("sectionToggle")
         self.content=QWidget(); self.content_layout=QVBoxLayout(self.content); self.content_layout.setContentsMargins(0,0,0,0)
         self.toggle.toggled.connect(self.set_expanded)
         layout.addWidget(self.toggle); layout.addWidget(self.content)
@@ -483,20 +483,29 @@ class CollapsibleSection(QWidget):
 class Operator(QMainWindow):
     def __init__(self,state,board):
         super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(720,860); self.setMinimumWidth(680)
+        self.setObjectName("operatorWindow")
         self.setWindowIcon(QIcon(str(asset_path("app.ico"))))
         self.listener=KPNPListener(self); self.simulator=KPNPEquipmentSimulator(self); self.simulator.packet.connect(self.listener.feed); self.listener.packet.connect(self.apply_packet); self.listener.status.connect(self.listener_status)
         self.settings=QSettings("KPNP Scoreboard","Live Scoreboard v3")
         self.updater=UpdateManager(self)
-        root=QWidget(); self.setCentralWidget(root); outer=QVBoxLayout(root)
+        self.dashboard_scroll=QScrollArea(); self.dashboard_scroll.setObjectName("dashboardScroll"); self.dashboard_scroll.setWidgetResizable(True); self.dashboard_scroll.setFrameShape(QFrame.NoFrame); self.dashboard_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.setCentralWidget(self.dashboard_scroll)
+        root=QWidget(); root.setObjectName("dashboardPage"); self.dashboard_scroll.setWidget(root); outer=QVBoxLayout(root); outer.setContentsMargins(16,16,16,18); outer.setSpacing(12)
+        header=QFrame(); header.setObjectName("appHeader"); header_layout=QHBoxLayout(header); header_layout.setContentsMargins(16,12,16,12)
+        logo=QLabel(); logo.setPixmap(QIcon(str(asset_path("app.ico"))).pixmap(42,42)); logo.setFixedSize(46,46)
+        heading=QVBoxLayout(); title=QLabel("KPNP Live Scoreboard"); title.setObjectName("appTitle"); subtitle=QLabel("Broadcast control centre"); subtitle.setObjectName("appSubtitle"); heading.addWidget(title); heading.addWidget(subtitle)
+        version=QLabel(f"VERSION {APP_VERSION}"); version.setObjectName("versionBadge")
+        header_layout.addWidget(logo); header_layout.addLayout(heading); header_layout.addStretch(); header_layout.addWidget(version); outer.addWidget(header)
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
-        top=QGridLayout(); show=QPushButton("Show output"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output to screen"); move.clicked.connect(self.move_output)
-        top.addWidget(show,0,0); top.addWidget(borderless,0,1); top.addWidget(QLabel("Design"),0,2); top.addWidget(self.design,0,3)
-        top.addWidget(QLabel("Output screen"),1,0); top.addWidget(self.screen,1,1,1,2); top.addWidget(move,1,3); top.setColumnStretch(3,1); outer.addLayout(top)
+        output_card=QGroupBox("Broadcast output"); top=QGridLayout(output_card); show=QPushButton("Show output"); show.setObjectName("primaryButton"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move to screen"); move.clicked.connect(self.move_output)
+        top.addWidget(show,0,0); top.addWidget(borderless,0,1)
+        top.addWidget(QLabel("Design"),1,0); top.addWidget(self.design,1,1)
+        top.addWidget(QLabel("Output screen"),2,0); top.addWidget(self.screen,2,1)
+        top.addWidget(move,3,0,1,2); top.setColumnStretch(1,1); outer.addWidget(output_card)
         self.manual_data_groups=[]
         self.manual_section=CollapsibleSection("Manual scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
-        sides=QHBoxLayout(); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); self.manual_section.content_layout.addLayout(sides)
+        sides=QVBoxLayout(); sides.setSpacing(8); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); self.manual_section.content_layout.addLayout(sides)
         match=QGroupBox("Match"); grid=QGridLayout(match)
         self.match_number=QSpinBox(); self.match_number.setRange(1,9999); self.match_number.setValue(state.match_number); self.match_number.valueChanged.connect(lambda v:state.update(match_number=v))
         self.round=QSpinBox(); self.round.setRange(1,3); self.round.setValue(state.round); self.round.valueChanged.connect(lambda v:state.update(round=v))
@@ -504,7 +513,8 @@ class Operator(QMainWindow):
         self.minutes.valueChanged.connect(self.set_clock); self.seconds.valueChanged.connect(self.set_clock)
         self.start=QPushButton("Start clock"); self.start.setCheckable(True); self.start.toggled.connect(self.clock_toggle)
         reset=QPushButton("Reset 1:30"); reset.clicked.connect(self.reset_clock)
-        grid.addWidget(QLabel("Match number"),0,0); grid.addWidget(self.match_number,0,1); grid.addWidget(QLabel("Round"),0,2); grid.addWidget(self.round,0,3); grid.addWidget(QLabel("Time"),0,4); grid.addWidget(self.minutes,0,5); grid.addWidget(QLabel(":"),0,6); grid.addWidget(self.seconds,0,7); grid.addWidget(self.start,0,8); grid.addWidget(reset,0,9); self.manual_section.content_layout.addWidget(match)
+        grid.addWidget(QLabel("Match number"),0,0); grid.addWidget(self.match_number,0,1); grid.addWidget(QLabel("Round"),0,2); grid.addWidget(self.round,0,3); grid.addWidget(QLabel("Time"),0,4); grid.addWidget(self.minutes,0,5); grid.addWidget(QLabel(":"),0,6); grid.addWidget(self.seconds,0,7)
+        grid.addWidget(self.start,1,0,1,4); grid.addWidget(reset,1,4,1,4); self.manual_section.content_layout.addWidget(match)
         self.manual_data_groups.append(match)
         self.sim_box=self.simulator_group(); outer.addWidget(self.sim_box)
         log_header=QHBoxLayout(); log_header.addWidget(QLabel("Listener output")); log_header.addStretch()
@@ -516,6 +526,8 @@ class Operator(QMainWindow):
         self.clock_timer=QTimer(self); self.clock_timer.timeout.connect(self.clock_step); self.clock_timer.start(1000)
         self.anim=QTimer(self); self.anim.timeout.connect(self.anim_step); self.anim.start(33)
         self.restore_settings()
+        QTimer.singleShot(0,lambda:self.dashboard_scroll.verticalScrollBar().setValue(0))
+        QTimer.singleShot(150,lambda:self.dashboard_scroll.verticalScrollBar().setValue(0))
         QTimer.singleShot(2500,lambda:self.check_for_updates() if self.auto_updates.isChecked() else None)
 
     def update_group(self):
@@ -523,11 +535,11 @@ class Operator(QMainWindow):
         self.update_status=QLabel(f"Installed version: {APP_VERSION}")
         self.auto_updates=QCheckBox("Check automatically at startup"); self.auto_updates.setChecked(True)
         self.auto_updates.toggled.connect(lambda checked:self.settings.setValue("auto_updates",checked))
-        self.check_update=QPushButton("Check for updates"); self.check_update.setMinimumHeight(32); self.check_update.clicked.connect(self.check_for_updates)
+        self.check_update=QPushButton("Check for updates"); self.check_update.setObjectName("primaryButton"); self.check_update.setMinimumHeight(32); self.check_update.clicked.connect(self.check_for_updates)
         self.install_update=QPushButton("Download update"); self.install_update.setEnabled(False); self.install_update.clicked.connect(self.download_update)
         self.update_progress=QProgressBar(); self.update_progress.setRange(0,100); self.update_progress.setVisible(False)
-        grid.addWidget(self.update_status,0,0,1,2); grid.addWidget(self.auto_updates,0,2)
-        grid.addWidget(self.check_update,1,0); grid.addWidget(self.install_update,1,1); grid.addWidget(self.update_progress,1,2)
+        grid.addWidget(self.update_status,0,0,1,2); grid.addWidget(self.auto_updates,1,0,1,2)
+        grid.addWidget(self.check_update,2,0); grid.addWidget(self.install_update,2,1); grid.addWidget(self.update_progress,3,0,1,2)
         self.updater.status.connect(self.update_status.setText)
         self.updater.current.connect(self.update_current)
         self.updater.available.connect(self.update_available)
@@ -576,15 +588,18 @@ class Operator(QMainWindow):
         self.finish_update_check(); self.update_status.setText(message); self.install_update.setEnabled(bool(self.updater.asset)); self.update_progress.setVisible(False)
 
     def connection_group(self):
-        box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
+        box=QGroupBox("KPNP connection"); grid=QGridLayout(box)
         self.source_mode=QComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=QComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
         self.host=QLineEdit("0.0.0.0"); self.port=QSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056)
-        self.connect_button=QPushButton("Start live listener"); self.connect_button.clicked.connect(self.start_source)
-        self.connection_status=QLabel("Not connected"); self.connection_status.setStyleSheet("color:#d9a800;font-weight:700")
-        grid.addWidget(QLabel("Data source"),0,0); grid.addWidget(self.source_mode,0,1); grid.addWidget(QLabel("Transport"),0,2); grid.addWidget(self.transport,0,3)
-        grid.addWidget(QLabel("Host / interface"),1,0); grid.addWidget(self.host,1,1); grid.addWidget(QLabel("Port"),1,2); grid.addWidget(self.port,1,3)
-        grid.addWidget(self.connect_button,2,0,1,2); grid.addWidget(self.connection_status,2,2,1,2); return box
+        self.connect_button=QPushButton("Start live listener"); self.connect_button.setObjectName("primaryButton"); self.connect_button.clicked.connect(self.start_source)
+        self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
+        self.connection_status.setWordWrap(True)
+        grid.addWidget(QLabel("Data source"),0,0); grid.addWidget(self.source_mode,0,1)
+        grid.addWidget(QLabel("Transport"),1,0); grid.addWidget(self.transport,1,1)
+        grid.addWidget(QLabel("Host / interface"),2,0); grid.addWidget(self.host,2,1)
+        grid.addWidget(QLabel("Port"),3,0); grid.addWidget(self.port,3,1)
+        grid.addWidget(self.connect_button,4,0,1,2); grid.addWidget(self.connection_status,5,0,1,2); grid.setColumnStretch(1,1); return box
 
     def restore_settings(self):
         self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
@@ -725,7 +740,35 @@ class Operator(QMainWindow):
 
 
 def main():
-    app=QApplication(sys.argv); app.setWindowIcon(QIcon(str(asset_path("app.ico")))); app.setStyle("Fusion"); app.setStyleSheet("QWidget{font:10pt 'Segoe UI';} QGroupBox{font-weight:600;margin-top:10px;padding-top:10px;} QPushButton{padding:6px 10px;}")
+    app=QApplication(sys.argv); app.setWindowIcon(QIcon(str(asset_path("app.ico")))); app.setStyle("Fusion"); app.setStyleSheet("""
+        QMainWindow#operatorWindow, QWidget#dashboardPage { background:#0d1117; color:#e7edf5; }
+        QScrollArea#dashboardScroll { background:#0d1117; border:none; }
+        QWidget { color:#dce4ee; font:10pt 'Segoe UI'; }
+        QFrame#appHeader { background:#151b24; border:1px solid #263142; border-radius:12px; }
+        QLabel#appTitle { color:#ffffff; font-size:18pt; font-weight:750; }
+        QLabel#appSubtitle { color:#8391a5; font-size:9pt; }
+        QLabel#versionBadge { color:#83c9ff; background:#102a40; border:1px solid #24577b; border-radius:10px; padding:5px 10px; font-size:8pt; font-weight:700; }
+        QGroupBox { background:#151a22; border:1px solid #2a3443; border-radius:10px; margin-top:13px; padding:16px 12px 12px; font-weight:700; color:#f3f6fa; }
+        QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 6px; color:#aebbd0; }
+        QLineEdit, QComboBox, QSpinBox, QTextEdit { background:#0f141b; border:1px solid #303c4d; border-radius:6px; padding:6px 8px; color:#eef4fb; selection-background-color:#1978b8; }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus { border:1px solid #3da9f5; }
+        QComboBox::drop-down { border:none; width:24px; }
+        QPushButton { background:#242d3a; border:1px solid #354256; border-radius:7px; padding:7px 12px; color:#e8eef6; font-weight:600; }
+        QPushButton:hover { background:#303b4b; border-color:#4d6078; }
+        QPushButton:pressed { background:#1d2530; }
+        QPushButton:disabled { color:#687487; background:#171c24; border-color:#252d38; }
+        QPushButton#primaryButton { background:#1676b8; border-color:#2999e6; color:white; }
+        QPushButton#primaryButton:hover { background:#218bd1; }
+        QToolButton#sectionToggle { background:#151a22; border:1px solid #2a3443; border-radius:9px; padding:9px 12px; color:#f3f6fa; font-weight:700; text-align:left; }
+        QToolButton#sectionToggle:hover { background:#1b222d; border-color:#3d4b60; }
+        QProgressBar { background:#0f141b; border:1px solid #303c4d; border-radius:5px; text-align:center; }
+        QProgressBar::chunk { background:#269ce1; border-radius:4px; }
+        QCheckBox { spacing:7px; }
+        QTextEdit { font-family:'Cascadia Mono','Consolas'; font-size:9pt; }
+        QScrollBar:vertical { background:#0d1117; width:10px; margin:0; }
+        QScrollBar::handle:vertical { background:#354255; border-radius:5px; min-height:28px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+    """)
     state=MatchState(); board=Scoreboard(state); operator=Operator(state,board); board.show(); operator.show(); sys.exit(app.exec())
 
 
