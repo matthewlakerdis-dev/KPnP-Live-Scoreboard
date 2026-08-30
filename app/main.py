@@ -482,7 +482,7 @@ class CollapsibleSection(QWidget):
 
 class Operator(QMainWindow):
     def __init__(self,state,board):
-        super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(850,860)
+        super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(720,860); self.setMinimumWidth(680)
         self.setWindowIcon(QIcon(str(asset_path("app.ico"))))
         self.listener=KPNPListener(self); self.simulator=KPNPEquipmentSimulator(self); self.simulator.packet.connect(self.listener.feed); self.listener.packet.connect(self.apply_packet); self.listener.status.connect(self.listener_status)
         self.settings=QSettings("KPNP Scoreboard","Live Scoreboard v3")
@@ -490,7 +490,9 @@ class Operator(QMainWindow):
         root=QWidget(); self.setCentralWidget(root); outer=QVBoxLayout(root)
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
-        top=QHBoxLayout(); show=QPushButton("Show output"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output to screen"); move.clicked.connect(self.move_output); top.addWidget(show); top.addWidget(borderless); top.addWidget(QLabel("Design")); top.addWidget(self.design); top.addWidget(QLabel("Output screen")); top.addWidget(self.screen); top.addWidget(move); outer.addLayout(top)
+        top=QGridLayout(); show=QPushButton("Show output"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output to screen"); move.clicked.connect(self.move_output)
+        top.addWidget(show,0,0); top.addWidget(borderless,0,1); top.addWidget(QLabel("Design"),0,2); top.addWidget(self.design,0,3)
+        top.addWidget(QLabel("Output screen"),1,0); top.addWidget(self.screen,1,1,1,2); top.addWidget(move,1,3); top.setColumnStretch(3,1); outer.addLayout(top)
         self.manual_data_groups=[]
         self.manual_section=CollapsibleSection("Manual scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
