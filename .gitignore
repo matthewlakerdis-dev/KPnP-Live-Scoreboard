@@ -1,0 +1,25 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local and generated application data
+*.log
+*.tmp
+*.bak
+
+# Application packager and installer output
+nuitka-dist/
+pyinstaller-dist/
+pyinstaller-build/
+*.spec
+installer-output/
+installer-smoke-*/
+
+# Rendered design checks
+test_output/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

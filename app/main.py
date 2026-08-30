@@ -20,11 +20,13 @@ from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardP
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout,
     QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-    QSpinBox, QTextEdit, QVBoxLayout, QWidget)
+    QSpinBox, QTextEdit, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
 from simulator import KPNPEquipmentSimulator
+from updater import UpdateManager
+from version import APP_VERSION
 
 
 BASE_W, BASE_H = 1273, 261
@@ -463,10 +465,11 @@ class Scoreboard(QWidget):
 
 class Operator(QMainWindow):
     def __init__(self,state,board):
-        super().__init__(); self.state=state; self.board=board; self.setWindowTitle("KPNP Scoreboard v3 — Operator"); self.resize(850,780)
+        super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(850,860)
         self.setWindowIcon(QIcon(str(asset_path("app.ico"))))
         self.listener=KPNPListener(self); self.simulator=KPNPEquipmentSimulator(self); self.simulator.packet.connect(self.listener.feed); self.listener.packet.connect(self.apply_packet); self.listener.status.connect(self.listener_status)
         self.settings=QSettings("KPNP Scoreboard","Live Scoreboard v3")
+        self.updater=UpdateManager(self)
         root=QWidget(); self.setCentralWidget(root); outer=QVBoxLayout(root)
         outer.addWidget(self.connection_group())
         top=QHBoxLayout(); show=QPushButton("Show output"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output to screen"); move.clicked.connect(self.move_output); top.addWidget(show); top.addWidget(borderless); top.addWidget(QLabel("Design")); top.addWidget(self.design); top.addWidget(QLabel("Output screen")); top.addWidget(self.screen); top.addWidget(move); outer.addLayout(top)
@@ -488,9 +491,58 @@ class Operator(QMainWindow):
         log_header.addWidget(clear_log); log_header.addWidget(copy_log); outer.addLayout(log_header)
         self.event_log=QTextEdit(); self.event_log.setReadOnly(True); self.event_log.setMaximumHeight(145); self.event_log.setPlaceholderText("Virtual and real KPNP events appear here…"); outer.addWidget(self.event_log)
         outer.addWidget(QLabel("The virtual equipment uses the same event listener boundary as future real KPNP hardware."))
+        outer.addWidget(self.update_group())
         self.clock_timer=QTimer(self); self.clock_timer.timeout.connect(self.clock_step); self.clock_timer.start(1000)
         self.anim=QTimer(self); self.anim.timeout.connect(self.anim_step); self.anim.start(33)
         self.restore_settings()
+        QTimer.singleShot(2500,lambda:self.updater.check() if self.auto_updates.isChecked() else None)
+
+    def update_group(self):
+        box=QGroupBox("Application updates"); grid=QGridLayout(box)
+        self.update_status=QLabel(f"Installed version: {APP_VERSION}")
+        self.auto_updates=QCheckBox("Check automatically at startup"); self.auto_updates.setChecked(True)
+        self.auto_updates.toggled.connect(lambda checked:self.settings.setValue("auto_updates",checked))
+        self.check_update=QPushButton("Check for updates"); self.check_update.clicked.connect(self.updater.check)
+        self.install_update=QPushButton("Download update"); self.install_update.setEnabled(False); self.install_update.clicked.connect(self.download_update)
+        self.update_progress=QProgressBar(); self.update_progress.setRange(0,100); self.update_progress.setVisible(False)
+        grid.addWidget(self.update_status,0,0,1,2); grid.addWidget(self.auto_updates,0,2)
+        grid.addWidget(self.check_update,1,0); grid.addWidget(self.install_update,1,1); grid.addWidget(self.update_progress,1,2)
+        self.updater.status.connect(self.update_status.setText)
+        self.updater.current.connect(self.update_current)
+        self.updater.available.connect(self.update_available)
+        self.updater.progress.connect(self.update_download_progress)
+        self.updater.ready.connect(self.update_ready)
+        self.updater.failed.connect(self.update_failed)
+        return box
+
+    def update_current(self,message):
+        self.update_status.setText(message); self.install_update.setEnabled(False); self.update_progress.setVisible(False)
+
+    def update_available(self,version,notes):
+        self.update_status.setText(f"Version {version} is available")
+        self.install_update.setText(f"Download {version}"); self.install_update.setEnabled(True)
+        self.install_update.setToolTip(notes[:1000])
+
+    def download_update(self):
+        if self.state.running:
+            QMessageBox.information(self,"Match active","Pause or finish the active match before installing an update.")
+            return
+        self.install_update.setEnabled(False); self.update_progress.setValue(0); self.update_progress.setVisible(True); self.updater.download()
+
+    def update_download_progress(self,value): self.update_progress.setValue(value)
+
+    def update_ready(self,path):
+        self.update_progress.setValue(100); self.update_status.setText("Update verified and ready to install")
+        answer=QMessageBox.question(self,"Install update","The update is verified. Close the scoreboard and install it now?")
+        if answer==QMessageBox.Yes: self.updater.install()
+        else:
+            self.install_update.setText("Install downloaded update"); self.install_update.setEnabled(True)
+            try: self.install_update.clicked.disconnect()
+            except RuntimeError: pass
+            self.install_update.clicked.connect(self.updater.install)
+
+    def update_failed(self,message):
+        self.update_status.setText(message); self.install_update.setEnabled(bool(self.updater.asset)); self.update_progress.setVisible(False)
 
     def connection_group(self):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
@@ -504,7 +556,7 @@ class Operator(QMainWindow):
         grid.addWidget(self.connect_button,2,0,1,2); grid.addWidget(self.connection_status,2,2,1,2); return box
 
     def restore_settings(self):
-        self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
+        self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
 
     def save_settings(self):
         self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex())

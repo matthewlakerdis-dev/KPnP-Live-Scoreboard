@@ -1,10 +1,12 @@
-# KPNP Live Scoreboard v3
+# KPNP Live Scoreboard v3.6
 
 Native PySide6 Windows scoreboard with a separate broadcast output and operator panel.
 
 ## Install
 
 Run `installer-output\KPNP-Live-Scoreboard-v3-Setup.exe`. The installer creates Start Menu and optional desktop shortcuts. Python is not required on the destination computer.
+
+Version 3.6 adds verified in-app updates from this repository's GitHub Releases. The first update-enabled version must be installed normally. Later releases can be downloaded and installed from the **Application updates** section of the operator dashboard.
 
 The setup dashboard remembers the selected Live/Virtual source, transport, host, port and output monitor. Live KPNP mode is reserved for the real protocol decoder once genuine KPNP traffic has been captured; Virtual Equipment mode is fully operational now.
 
@@ -22,4 +24,16 @@ The **Virtual KPNP equipment** panel can connect/disconnect a simulated device, 
 
 `app/kpnp_listener.py` is the stable adapter boundary for a future decoded KPNP data feed. The virtual equipment already uses this boundary, so a real packet decoder can replace it without changing the scoreboard or match-state logic.
 
-Run `build_windows.bat` with 64-bit Python 3.13 to rebuild the Qt-native standalone application using Nuitka. Run `build_installer.bat` with Inno Setup 6 installed to rebuild the Setup executable.
+Run `build_windows.bat` with 64-bit Python 3.13 to rebuild the Qt-native standalone application using PyInstaller. Run `build_installer.bat` with Inno Setup 6 installed to rebuild the Setup executable.
+
+## Publishing an update
+
+1. Change `APP_VERSION` in `app/version.py`.
+2. Commit the tested source to `main`.
+3. Create and push a matching tag, for example `v3.6.1`.
+4. GitHub Actions builds the standalone app, portable ZIP, checksums and installer.
+5. The workflow publishes those files to a GitHub Release.
+
+Installed applications query the latest public release, verify the installer using GitHub's SHA-256 asset digest, and run it silently after the operator approves the update. Updates are blocked while the match clock is running. Local settings and KPNP connection details remain in the user's application-data folder.
+
+Generated build folders, installers, local captures, Python caches and rendered design checks are excluded from source control. Release binaries belong in GitHub Releases rather than the source tree.

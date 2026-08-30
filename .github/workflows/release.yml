@@ -1,0 +1,83 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install build dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check source
+        run: python -m compileall -q app
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = python -c "import sys;sys.path.insert(0,'app');from version import APP_VERSION;print(APP_VERSION)"
+          if ("v$version" -ne "${{ github.ref_name }}" -and "${{ github.event_name }}" -eq "push") {
+            throw "Tag ${{ github.ref_name }} does not match app version v$version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build standalone application
+        shell: pwsh
+        run: >-
+          python -m PyInstaller --noconfirm --clean --windowed --onedir
+          --name KPNP-Live-Scoreboard --icon assets/app.ico
+          --add-data "$PWD/assets;assets" --distpath pyinstaller-dist
+          --workpath pyinstaller-build app/main.py
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: >-
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          "/DMyAppVersion=${{ steps.version.outputs.version }}"
+          installer/KPNP-Live-Scoreboard.iss
+
+      - name: Package portable build and checksums
+        shell: pwsh
+        run: |
+          Compress-Archive -Path pyinstaller-dist/KPNP-Live-Scoreboard/* -DestinationPath "installer-output/KPNP-Live-Scoreboard-v${{ steps.version.outputs.version }}-Portable.zip"
+          Get-ChildItem installer-output -File | ForEach-Object {
+            "$(Get-FileHash $_.FullName -Algorithm SHA256 | Select-Object -ExpandProperty Hash)  $($_.Name)"
+          } | Set-Content installer-output/SHA256SUMS.txt
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KPNP-Live-Scoreboard-v${{ steps.version.outputs.version }}
+          path: installer-output/*
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" installer-output/* --generate-notes --verify-tag

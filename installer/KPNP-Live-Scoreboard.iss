@@ -1,11 +1,14 @@
 #define MyAppName "KPNP Live Scoreboard"
-#define MyAppVersion "3.5.3"
+#ifndef MyAppVersion
+  #define MyAppVersion "3.6.0"
+#endif
 #define MyAppExeName "KPNP-Live-Scoreboard.exe"
 
 [Setup]
 AppId={{8C6D3BD9-6BCE-42A1-941A-182F599BFB64}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
 DefaultDirName={autopf}\KPNP Live Scoreboard
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
@@ -20,7 +23,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\app.ico
 
 [Files]
-Source: "..\nuitka-dist\main.dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\pyinstaller-dist\KPNP-Live-Scoreboard\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; AppUserModelID: "KPNP.LiveScoreboard.v3"; Tasks: startmenuicon
@@ -31,4 +34,4 @@ Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescrip
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall
