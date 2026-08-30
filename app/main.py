@@ -627,6 +627,7 @@ class Operator(QMainWindow):
     def connection_group(self):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
         box.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
+        self.scoring_program=WheelSafeComboBox(); self.scoring_program.addItems(("KPnP/TKDScoring","Daedo/TrueScore")); self.scoring_program.currentIndexChanged.connect(lambda _:self.save_settings())
         self.source_mode=WheelSafeComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=WheelSafeComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
         self.host=QLineEdit("0.0.0.0"); self.port=WheelSafeSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056); self.port.setButtonSymbols(QSpinBox.NoButtons)
@@ -634,6 +635,7 @@ class Operator(QMainWindow):
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
         self.connection_status.setWordWrap(False); self.connection_status.setMinimumWidth(190)
         host_hint=QLabel("IP address of the KPnP/Daedo machine"); host_hint.setObjectName("fieldHint")
+        grid.addWidget(QLabel("Program"),0,0); grid.addWidget(self.scoring_program,0,1)
         grid.addWidget(host_hint,0,3)
         grid.addWidget(QLabel("Source"),1,0); grid.addWidget(self.source_mode,1,1); grid.addWidget(QLabel("Host"),1,2); grid.addWidget(self.host,1,3)
         grid.addWidget(QLabel("Protocol"),2,0); grid.addWidget(self.transport,2,1); grid.addWidget(QLabel("Port"),2,2); grid.addWidget(self.port,2,3)
@@ -641,10 +643,10 @@ class Operator(QMainWindow):
         grid.addLayout(connection_row,3,0,1,4); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
 
     def restore_settings(self):
-        self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
+        self.scoring_program.setCurrentIndex(self.settings.value("program",0,int)); self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
 
     def save_settings(self):
-        self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex())
+        self.settings.setValue("program",self.scoring_program.currentIndex()); self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex())
         if self.source_mode.currentIndex()==1: self.settings.setValue("manual_controls_expanded",self.manual_section.toggle.isChecked())
 
     def design_changed(self,design): self.board.set_design(design); self.save_settings()
