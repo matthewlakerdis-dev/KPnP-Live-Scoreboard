@@ -513,7 +513,8 @@ class Operator(QMainWindow):
         root=QWidget(); root.setObjectName("dashboardPage"); self.dashboard_scroll.setWidget(root); outer=QVBoxLayout(root); outer.setContentsMargins(12,12,12,14); outer.setSpacing(8)
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
-        output_card=QGroupBox("Output"); top=QGridLayout(output_card); top.setHorizontalSpacing(7); top.setVerticalSpacing(6)
+        output_card=QGroupBox("Output"); output_outer=QHBoxLayout(output_card); output_outer.addStretch(1)
+        top=QGridLayout(); top.setHorizontalSpacing(7); top.setVerticalSpacing(6); output_outer.addLayout(top); output_outer.addStretch(1)
         self.show_output_button=QPushButton("Show output"); self.show_output_button.setObjectName("primaryButton"); self.show_output_button.clicked.connect(self.toggle_output)
         borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
         self.design=WheelSafeComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
@@ -521,7 +522,7 @@ class Operator(QMainWindow):
         for combo in (self.screen,self.design): fit_combo_to_items(combo)
         top.addWidget(self.show_output_button,0,0); top.addWidget(QLabel("Output screen"),0,1); top.addWidget(self.screen,0,2); top.addWidget(move,0,3)
         top.addWidget(borderless,1,0); top.addWidget(QLabel("Design"),1,1); top.addWidget(self.design,1,2)
-        top.setColumnStretch(4,1); outer.addWidget(output_card)
+        outer.addWidget(output_card)
         self.manual_data_groups=[]
         self.manual_section=CollapsibleSection("Scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
