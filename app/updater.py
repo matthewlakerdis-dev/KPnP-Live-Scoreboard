@@ -71,7 +71,14 @@ class UpdateManager(QObject):
                 if status in (403,429):
                     raise RuntimeError("GitHub is temporarily rate-limiting update checks; try again later or download the installer from GitHub Releases")
                 raise RuntimeError(reply.errorString())
-            release = json.loads(bytes(reply.readAll()))
+            payload = bytes(reply.readAll())
+            try:
+                release = json.loads(payload)
+            except (json.JSONDecodeError,UnicodeDecodeError):
+                if allow_api_fallback:
+                    self._check_url(LATEST_RELEASE_API,False)
+                    return
+                raise RuntimeError("GitHub returned unreadable update information; please try again")
             self._use_release(release)
         except Exception as exc:
             self.failed.emit(f"Update check failed: {exc}")
