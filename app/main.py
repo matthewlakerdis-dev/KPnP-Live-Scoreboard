@@ -40,6 +40,13 @@ def asset_path(*parts):
     return root.joinpath("assets", *parts)
 
 
+class WheelSafeComboBox(QComboBox):
+    """Keep dashboard scrolling from changing a selection by accident."""
+
+    def wheelEvent(self,event):
+        event.ignore()
+
+
 @dataclass
 class Side:
     country: str
@@ -495,8 +502,8 @@ class Operator(QMainWindow):
         output_card=QGroupBox("Output"); top=QGridLayout(output_card)
         self.show_output_button=QPushButton("Show output"); self.show_output_button.setObjectName("primaryButton"); self.show_output_button.clicked.connect(self.toggle_output)
         borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
-        self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
-        self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output"); move.clicked.connect(self.move_output)
+        self.design=WheelSafeComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
+        self.screen=WheelSafeComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output"); move.clicked.connect(self.move_output)
         top.addWidget(self.show_output_button,0,0); top.addWidget(QLabel("Output screen"),0,1); top.addWidget(self.screen,0,2,1,2)
         top.addWidget(borderless,1,0); top.addWidget(move,1,1); top.addWidget(QLabel("Design"),1,2); top.addWidget(self.design,1,3)
         top.setColumnStretch(3,1); outer.addWidget(output_card)
@@ -588,8 +595,8 @@ class Operator(QMainWindow):
 
     def connection_group(self):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
-        self.source_mode=QComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
-        self.transport=QComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
+        self.source_mode=WheelSafeComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
+        self.transport=WheelSafeComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
         self.host=QLineEdit("0.0.0.0"); self.port=QSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056)
         self.connect_button=QPushButton("Start live listener"); self.connect_button.setObjectName("primaryButton"); self.connect_button.clicked.connect(self.start_source)
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
@@ -667,7 +674,7 @@ class Operator(QMainWindow):
     def side_group(self,title,side):
         box=QGroupBox(title); form=QFormLayout(box)
         self.manual_data_groups.append(box)
-        countries=QComboBox(); countries.setEditable(True); countries.setInsertPolicy(QComboBox.NoInsert)
+        countries=WheelSafeComboBox(); countries.setEditable(True); countries.setInsertPolicy(QComboBox.NoInsert)
         selected=0
         for index,country in enumerate(sorted(pycountry.countries,key=lambda c:c.name)):
             alpha3=getattr(country,"alpha_3",""); countries.addItem(f"{country.name} ({alpha3})",(country.alpha_2,alpha3,country.name.upper()))
