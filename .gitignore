@@ -17,6 +17,7 @@ installer-smoke-*/
 
 # Rendered design checks
 test_output/
+test-output/
 
 # Editors and operating systems
 .vscode/
