@@ -10,6 +10,8 @@ Version 3.6 adds verified in-app updates from this repository's GitHub Releases.
 
 Windows system runtime DLLs are deliberately not bundled. Each installation uses the compatible Universal CRT and API-set libraries supplied by its own Windows version, avoiding QtCore startup failures caused by runtime files copied from a newer build machine.
 
+The installer also removes generated DLL, extension-module and package folders left by older Nuitka or PyInstaller versions before copying a new release. Application settings and KPNP connection details remain in the user's application-data folder.
+
 The setup dashboard remembers the selected Live/Virtual source, transport, host, port and output monitor. Live KPNP mode is reserved for the real protocol decoder once genuine KPNP traffic has been captured; Virtual Equipment mode is fully operational now.
 
 ## Run

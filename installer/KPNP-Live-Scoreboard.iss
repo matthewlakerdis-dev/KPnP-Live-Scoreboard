@@ -1,6 +1,6 @@
 #define MyAppName "KPNP Live Scoreboard"
 #ifndef MyAppVersion
-  #define MyAppVersion "3.6.2"
+  #define MyAppVersion "3.6.3"
 #endif
 #define MyAppExeName "KPNP-Live-Scoreboard.exe"
 
@@ -21,6 +21,17 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\app.ico
+
+[InstallDelete]
+; Remove generated payloads left by older Nuitka and PyInstaller builds before
+; copying the current package. Settings live in AppData and are not touched.
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.pyd"
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\assets"
+Type: filesandordirs; Name: "{app}\pycountry"
+Type: filesandordirs; Name: "{app}\PySide6"
+Type: filesandordirs; Name: "{app}\shiboken6"
 
 [Files]
 Source: "..\pyinstaller-dist\KPNP-Live-Scoreboard\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
