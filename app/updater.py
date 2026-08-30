@@ -50,12 +50,19 @@ class UpdateManager(QObject):
         self.status.emit("Checking for updates…")
         self._check_url(LATEST_RELEASE_MANIFEST,True)
 
-    def _check_url(self,url: str,allow_api_fallback: bool):
+    def _check_url(self,url: str,allow_api_fallback: bool,redirects: int=0):
         reply = self.network.get(self._request(url))
-        reply.finished.connect(lambda:self._checked(reply,allow_api_fallback))
+        reply.finished.connect(lambda:self._checked(reply,allow_api_fallback,redirects))
 
-    def _checked(self,reply: QNetworkReply,allow_api_fallback: bool=False):
+    def _checked(self,reply: QNetworkReply,allow_api_fallback: bool=False,redirects: int=0):
         try:
+            redirect = reply.attribute(QNetworkRequest.RedirectionTargetAttribute)
+            if redirect and redirect.isValid():
+                if redirects >= 5:
+                    raise RuntimeError("GitHub returned too many redirects")
+                target = reply.url().resolved(redirect).toString()
+                self._check_url(target,allow_api_fallback,redirects+1)
+                return
             if reply.error() != QNetworkReply.NoError:
                 if allow_api_fallback:
                     self._check_url(LATEST_RELEASE_API,False)
@@ -101,12 +108,22 @@ class UpdateManager(QObject):
         folder.mkdir(parents=True, exist_ok=True)
         self.download_path = folder / str(self.asset.get("name", "KPNP-Live-Scoreboard-Setup.exe"))
         self.status.emit(f"Downloading version {self.version}…")
+        self._download_url(url)
+
+    def _download_url(self,url: str,redirects: int=0):
         reply = self.network.get(self._request(url))
         reply.downloadProgress.connect(lambda received,total:self.progress.emit(int(received*100/total) if total>0 else 0))
-        reply.finished.connect(lambda: self._downloaded(reply))
+        reply.finished.connect(lambda: self._downloaded(reply,redirects))
 
-    def _downloaded(self, reply: QNetworkReply):
+    def _downloaded(self, reply: QNetworkReply,redirects: int=0):
         try:
+            redirect = reply.attribute(QNetworkRequest.RedirectionTargetAttribute)
+            if redirect and redirect.isValid():
+                if redirects >= 5:
+                    raise RuntimeError("GitHub returned too many redirects")
+                target = reply.url().resolved(redirect).toString()
+                self._download_url(target,redirects+1)
+                return
             if reply.error() != QNetworkReply.NoError:
                 raise RuntimeError(reply.errorString())
             data = bytes(reply.readAll())
