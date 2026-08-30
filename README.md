@@ -8,7 +8,7 @@ Run `installer-output\KPNP-Live-Scoreboard-v3-Setup.exe`. The installer creates 
 
 Version 3.6 adds verified in-app updates from this repository's GitHub Releases. The first update-enabled version must be installed normally. Later releases can be checked, downloaded and installed from the clearly visible **Application updates** section near the top of the operator dashboard.
 
-Windows system runtime DLLs are deliberately not bundled. Each installation uses the compatible Universal CRT and API-set libraries supplied by its own Windows version, avoiding QtCore startup failures caused by runtime files copied from a newer build machine.
+Windows releases use Python 3.12 and the pinned, matched PySide6 6.8.3 runtime. Windows system runtime DLLs are deliberately not bundled. Each installation uses the compatible Universal CRT and API-set libraries supplied by its own Windows version, avoiding QtCore startup failures caused by runtime files copied from a newer build machine.
 
 The installer also removes generated DLL, extension-module and package folders left by older Nuitka or PyInstaller versions before copying a new release. Application settings and KPNP connection details remain in the user's application-data folder.
 

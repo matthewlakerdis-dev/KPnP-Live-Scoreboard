@@ -14,6 +14,6 @@ if not exist "%ISCC%" (
   )
   set "ISCC=iscc"
 )
-for /f %%v in ('py -3.13 -c "import sys;sys.path.insert(0,'app');from version import APP_VERSION;print(APP_VERSION)"') do set APP_VERSION=%%v
+for /f %%v in ('py -3.12 -c "import sys;sys.path.insert(0,'app');from version import APP_VERSION;print(APP_VERSION)"') do set APP_VERSION=%%v
 "%ISCC%" /DMyAppVersion=%APP_VERSION% installer\KPNP-Live-Scoreboard.iss
 if errorlevel 1 pause

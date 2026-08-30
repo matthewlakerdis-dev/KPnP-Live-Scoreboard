@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-py -3.13 -m PyInstaller --noconfirm --clean --windowed --onedir --name KPNP-Live-Scoreboard --icon assets\app.ico --add-data "%CD%\assets;assets" --distpath pyinstaller-dist --workpath pyinstaller-build app\main.py
+py -3.12 -m PyInstaller --noconfirm --clean --windowed --onedir --name KPNP-Live-Scoreboard --icon assets\app.ico --add-data "%CD%\assets;assets" --distpath pyinstaller-dist --workpath pyinstaller-build app\main.py
 if errorlevel 1 exit /b 1
 
 rem Windows supplies the Universal CRT and API-set forwarders. Bundling copies
