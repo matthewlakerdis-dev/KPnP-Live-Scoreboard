@@ -17,10 +17,10 @@ if sys.platform == "win32":
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("KPNP.LiveScoreboard.v3")
 
 from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardPaths, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-    QScrollArea, QSizePolicy, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
+    QScrollArea, QSizePolicy, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar, QListView)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
@@ -50,6 +50,12 @@ def fit_combo_to_items(combo):
 
 class WheelSafeComboBox(QComboBox):
     """Keep dashboard scrolling from changing a selection by accident."""
+
+    def __init__(self,parent=None):
+        super().__init__(parent)
+        # Use a Qt list for popups, rather than a platform-native menu that
+        # can inherit a white Windows background behind our light text.
+        self.setView(QListView(self))
 
     def wheelEvent(self,event):
         event.ignore()
@@ -531,7 +537,11 @@ class Operator(QMainWindow):
         self.manual_data_groups=[]
         self.manual_section=CollapsibleSection("Scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
-        sides=QVBoxLayout(); sides.setSpacing(8); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); self.manual_section.content_layout.addLayout(sides)
+        self.results_box=QGroupBox("Scoreboard results"); self.results_box.setObjectName("scoreboardResults")
+        self.results_box.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
+        results_layout=QVBoxLayout(self.results_box); results_layout.setContentsMargins(4,8,4,4); results_layout.setSpacing(8)
+        self.manual_section.content_layout.addWidget(self.results_box)
+        sides=QVBoxLayout(); sides.setSpacing(8); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); results_layout.addLayout(sides)
         match=QGroupBox("Match"); grid=QVBoxLayout(match); grid.setSpacing(7)
         self.match_number=WheelSafeSpinBox(); self.match_number.setRange(1,9999); self.match_number.setValue(state.match_number); self.match_number.valueChanged.connect(lambda v:state.update(match_number=v))
         self.round=WheelSafeSpinBox(); self.round.setRange(1,3); self.round.setValue(state.round); self.round.valueChanged.connect(lambda v:state.update(round=v))
@@ -548,14 +558,17 @@ class Operator(QMainWindow):
         time_row.addWidget(self.minutes); time_row.addWidget(QLabel(":")); time_row.addWidget(self.seconds)
         match_row.addLayout(time_row); match_row.addStretch(1)
         button_row=QHBoxLayout(); button_row.setSpacing(7); button_row.addWidget(self.start,1); button_row.addWidget(reset,1)
-        grid.addLayout(match_row); grid.addLayout(button_row); self.manual_section.content_layout.addWidget(match)
+        grid.addLayout(match_row); grid.addLayout(button_row); results_layout.addWidget(match)
         self.manual_data_groups.append(match)
         self.sim_box=self.simulator_group(); outer.addWidget(self.sim_box)
-        log_header=QHBoxLayout(); log_header.addWidget(QLabel("Listener output")); log_header.addStretch()
+        self.listener_box=QGroupBox("Listener output"); self.listener_box.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
+        log_layout=QVBoxLayout(self.listener_box); log_layout.setSpacing(8)
+        log_header=QHBoxLayout(); log_header.addStretch()
         clear_log=QPushButton("Clear"); clear_log.clicked.connect(lambda:self.event_log.clear())
         copy_log=QPushButton("Copy all"); copy_log.clicked.connect(self.copy_event_log)
-        log_header.addWidget(clear_log); log_header.addWidget(copy_log); outer.addLayout(log_header)
-        self.event_log=QTextEdit(); self.event_log.setReadOnly(True); self.event_log.setMaximumHeight(145); self.event_log.setPlaceholderText("Virtual and real KPNP events appear here…"); outer.addWidget(self.event_log)
+        log_header.addWidget(clear_log); log_header.addWidget(copy_log); log_layout.addLayout(log_header)
+        self.event_log=QTextEdit(); self.event_log.setReadOnly(True); self.event_log.setMaximumHeight(145); self.event_log.setPlaceholderText("Virtual and real KPNP events appear here…"); log_layout.addWidget(self.event_log)
+        outer.addWidget(self.listener_box)
         self.clock_timer=QTimer(self); self.clock_timer.timeout.connect(self.clock_step); self.clock_timer.start(1000)
         self.anim=QTimer(self); self.anim.timeout.connect(self.anim_step); self.anim.start(33)
         self.output_ui_timer=QTimer(self); self.output_ui_timer.timeout.connect(self.sync_output_button); self.output_ui_timer.start(500)
@@ -836,19 +849,54 @@ class Operator(QMainWindow):
     def show_output(self): self.board.show(); self.board.raise_(); self.board.activateWindow(); self.sync_output_button()
 
 
-def main():
-    app=QApplication(sys.argv); app.setWindowIcon(QIcon(str(asset_path("app.ico")))); app.setStyle("Fusion"); stylesheet="""
+def apply_dashboard_theme(app):
+    """Own both foreground and background colours, including native fallbacks."""
+    app.setStyle("Fusion")
+    palette=QPalette()
+    colours={
+        QPalette.Window:"#151a22", QPalette.WindowText:"#eef4fb",
+        QPalette.Base:"#0f141b", QPalette.AlternateBase:"#202936",
+        QPalette.Text:"#eef4fb", QPalette.Button:"#242d3a",
+        QPalette.ButtonText:"#eef4fb", QPalette.Highlight:"#166699",
+        QPalette.HighlightedText:"#ffffff", QPalette.ToolTipBase:"#242d3a",
+        QPalette.ToolTipText:"#eef4fb", QPalette.PlaceholderText:"#a8b3c2",
+        QPalette.Light:"#728096", QPalette.Midlight:"#536176",
+        QPalette.Mid:"#354256", QPalette.Dark:"#0d1117",
+        QPalette.Shadow:"#080b10", QPalette.BrightText:"#ffffff",
+        QPalette.Link:"#83c9ff", QPalette.LinkVisited:"#c3b6ff",
+    }
+    for group in (QPalette.Active,QPalette.Inactive,QPalette.Disabled):
+        for role,colour in colours.items(): palette.setColor(group,role,QColor(colour))
+    for role in (QPalette.Text,QPalette.WindowText,QPalette.ButtonText):
+        palette.setColor(QPalette.Disabled,role,QColor("#a8b3c2"))
+    app.setPalette(palette)
+    stylesheet="""
         QMainWindow#operatorWindow, QWidget#dashboardPage { background:#0d1117; color:#e7edf5; }
         QScrollArea#dashboardScroll { background:#0d1117; border:none; }
         QWidget { color:#dce4ee; font:10pt 'Segoe UI'; }
         QFrame#appHeader { background:#151b24; border:1px solid #263142; border-radius:12px; }
         QLabel#appTitle { color:#ffffff; font-size:18pt; font-weight:750; }
         QLabel#appSubtitle { color:#8391a5; font-size:9pt; }
-        QLabel#fieldHint { color:#8f9aaa; font-size:8pt; font-weight:500; }
+        QLabel#fieldHint { color:#a8b3c2; font-size:9pt; font-weight:500; }
         QLabel#versionBadge { color:#83c9ff; background:#102a40; border:1px solid #24577b; border-radius:10px; padding:5px 10px; font-size:8pt; font-weight:700; }
         QGroupBox { background:#151a22; border:1px solid #2a3443; border-radius:10px; margin-top:13px; padding:16px 12px 12px; font-weight:700; color:#f3f6fa; }
         QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 6px; color:#aebbd0; }
-        QLineEdit, QComboBox, QSpinBox, QTextEdit { background:#0f141b; border:1px solid #303c4d; border-radius:6px; padding:6px 8px; color:#eef4fb; selection-background-color:#1978b8; }
+        QGroupBox#scoreboardResults { padding:12px 4px 4px; }
+        QLineEdit, QComboBox, QSpinBox, QTextEdit { background:#0f141b; border:1px solid #536176; border-radius:6px; padding:6px 8px; color:#eef4fb; selection-background-color:#166699; selection-color:#ffffff; }
+        QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QTextEdit:disabled { background:#1b222d; color:#a8b3c2; border-color:#354256; }
+        QLabel:disabled, QCheckBox:disabled, QGroupBox:disabled { color:#a8b3c2; }
+        QAbstractItemView, QComboBox QAbstractItemView { background:#0f141b; alternate-background-color:#202936; color:#eef4fb; border:1px solid #728096; selection-background-color:#166699; selection-color:#ffffff; outline:0; }
+        QAbstractItemView::item { padding:4px 6px; min-height:22px; }
+        QAbstractItemView::item:selected { background:#166699; color:#ffffff; }
+        QAbstractItemView::item:hover { background:#303b4b; color:#ffffff; }
+        QAbstractItemView::item:disabled { color:#a8b3c2; }
+        QDialog, QMessageBox, QInputDialog { background:#151a22; color:#eef4fb; }
+        QMenu { background:#151a22; color:#eef4fb; border:1px solid #728096; }
+        QMenu::item { padding:6px 18px; }
+        QMenu::item:selected { background:#166699; color:#ffffff; }
+        QMenu::item:disabled { color:#a8b3c2; }
+        QMenu::separator { height:1px; background:#536176; margin:4px; }
+        QToolTip { background:#242d3a; color:#eef4fb; border:1px solid #728096; padding:6px; }
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus { border:1px solid #3da9f5; }
         QComboBox::drop-down { border:none; width:24px; }
         QComboBox::down-arrow { image:url(__DOWN_ARROW__); width:10px; height:7px; }
@@ -861,21 +909,32 @@ def main():
         QPushButton { background:#242d3a; border:1px solid #354256; border-radius:7px; padding:7px 12px; color:#e8eef6; font-weight:600; }
         QPushButton:hover { background:#303b4b; border-color:#4d6078; }
         QPushButton:pressed { background:#1d2530; }
-        QPushButton:disabled { color:#687487; background:#171c24; border-color:#252d38; }
+        QPushButton:disabled { color:#a8b3c2; background:#171c24; border-color:#354256; }
         QPushButton#primaryButton { background:#1676b8; border-color:#2999e6; color:white; }
-        QPushButton#primaryButton:hover { background:#218bd1; }
+        QPushButton#primaryButton:hover { background:#166699; }
+        QPushButton#primaryButton:disabled { color:#a8b3c2; background:#171c24; border-color:#354256; }
+        QPushButton:focus, QToolButton:focus { border:1px solid #83c9ff; }
         QToolButton#sectionToggle { background:#151a22; border:1px solid #2a3443; border-radius:9px; padding:9px 12px; color:#f3f6fa; font-weight:700; text-align:left; }
         QToolButton#sectionToggle:hover { background:#1b222d; border-color:#3d4b60; }
-        QProgressBar { background:#0f141b; border:1px solid #303c4d; border-radius:5px; text-align:center; }
-        QProgressBar::chunk { background:#269ce1; border-radius:4px; }
+        QProgressBar { background:#0f141b; color:#ffffff; border:1px solid #536176; border-radius:5px; text-align:center; }
+        QProgressBar::chunk { background:#166699; border-radius:4px; }
         QCheckBox { spacing:7px; }
+        QCheckBox::indicator { width:16px; height:16px; border:1px solid #728096; border-radius:3px; background:#0f141b; }
+        QCheckBox::indicator:checked { background:#166699; border-color:#83c9ff; image:url(__CHECK__); }
+        QCheckBox::indicator:disabled { border-color:#728096; background:#242d3a; }
+        QCheckBox::indicator:hover { border-color:#83c9ff; }
         QTextEdit { font-family:'Cascadia Mono','Consolas'; font-size:9pt; }
         QScrollBar:vertical { background:#0d1117; width:10px; margin:0; }
         QScrollBar::handle:vertical { background:#354255; border-radius:5px; min-height:28px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
     """
     stylesheet=stylesheet.replace("__UP_ARROW__",str(asset_path("spin-up.svg")).replace("\\","/")).replace("__DOWN_ARROW__",str(asset_path("spin-down.svg")).replace("\\","/"))
+    stylesheet=stylesheet.replace("__CHECK__",str(asset_path("check.svg")).replace("\\","/"))
     app.setStyleSheet(stylesheet)
+
+
+def main():
+    app=QApplication(sys.argv); app.setWindowIcon(QIcon(str(asset_path("app.ico")))); apply_dashboard_theme(app)
     state=MatchState(); board=Scoreboard(state); operator=Operator(state,board); board.show(); operator.show(); sys.exit(app.exec())
 
 
