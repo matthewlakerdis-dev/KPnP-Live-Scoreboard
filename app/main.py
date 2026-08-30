@@ -616,7 +616,8 @@ class Operator(QMainWindow):
         self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
 
     def save_settings(self):
-        self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex()); self.settings.setValue("manual_controls_expanded",self.manual_section.toggle.isChecked())
+        self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex())
+        if self.source_mode.currentIndex()==1: self.settings.setValue("manual_controls_expanded",self.manual_section.toggle.isChecked())
 
     def design_changed(self,design): self.board.set_design(design); self.save_settings()
 
@@ -630,6 +631,7 @@ class Operator(QMainWindow):
     def source_changed(self,index):
         virtual=index==1
         self.listener.stop()
+        self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool) if virtual else False)
         if hasattr(self,"sim_box"): self.sim_box.setVisible(virtual)
         for group in getattr(self,"manual_data_groups",()): group.setEnabled(virtual)
         self.host.setEnabled(not virtual); self.port.setEnabled(not virtual); self.transport.setEnabled(not virtual)
