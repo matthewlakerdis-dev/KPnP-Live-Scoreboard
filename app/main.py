@@ -514,7 +514,7 @@ class Operator(QMainWindow):
         root=QWidget(); root.setObjectName("dashboardPage"); self.dashboard_scroll.setWidget(root); outer=QVBoxLayout(root); outer.setContentsMargins(12,12,12,14); outer.setSpacing(8)
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
-        output_card=QGroupBox("Output"); output_outer=QHBoxLayout(output_card); output_outer.addStretch(1)
+        output_card=QGroupBox("Output"); output_card.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum); output_outer=QHBoxLayout(output_card); output_outer.addStretch(1)
         top=QGridLayout(); top.setHorizontalSpacing(7); top.setVerticalSpacing(6); output_outer.addLayout(top); output_outer.addStretch(1)
         self.show_output_button=QPushButton("Show output"); self.show_output_button.setObjectName("primaryButton"); self.show_output_button.clicked.connect(self.toggle_output)
         borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
@@ -567,6 +567,7 @@ class Operator(QMainWindow):
 
     def update_group(self):
         box=QGroupBox("Application updates"); grid=QGridLayout(box)
+        box.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
         self.update_status=QLabel(f"Installed version: {APP_VERSION}")
         self.auto_updates=QCheckBox("Check automatically at startup"); self.auto_updates.setChecked(True)
         self.auto_updates.toggled.connect(lambda checked:self.settings.setValue("auto_updates",checked))
