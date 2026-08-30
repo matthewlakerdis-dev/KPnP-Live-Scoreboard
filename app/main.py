@@ -515,7 +515,7 @@ class Operator(QMainWindow):
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
         output_card=QGroupBox("Output"); output_card.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum); output_outer=QHBoxLayout(output_card); output_outer.addStretch(1)
-        top=QGridLayout(); top.setHorizontalSpacing(7); top.setVerticalSpacing(6); output_outer.addLayout(top); output_outer.addStretch(1)
+        top=QGridLayout(); top.setHorizontalSpacing(7); top.setVerticalSpacing(12); output_outer.addLayout(top); output_outer.addStretch(1)
         self.show_output_button=QPushButton("Show output"); self.show_output_button.setObjectName("primaryButton"); self.show_output_button.clicked.connect(self.toggle_output)
         borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
         self.design=WheelSafeComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
