@@ -20,7 +20,7 @@ from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardP
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-    QScrollArea, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
+    QScrollArea, QSizePolicy, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
@@ -487,6 +487,7 @@ class Scoreboard(QWidget):
 class CollapsibleSection(QWidget):
     def __init__(self,title,parent=None):
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
         layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(4)
         self.toggle=QToolButton(text=title,checkable=True,checked=True)
         self.toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); self.toggle.setArrowType(Qt.DownArrow)
