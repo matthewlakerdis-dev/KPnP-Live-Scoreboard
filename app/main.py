@@ -18,7 +18,7 @@ if sys.platform == "win32":
 
 from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardPaths, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
     QScrollArea, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
@@ -504,9 +504,9 @@ class Operator(QMainWindow):
         borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
         self.design=WheelSafeComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
         self.screen=WheelSafeComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output"); move.clicked.connect(self.move_output)
-        top.addWidget(self.show_output_button,0,0); top.addWidget(QLabel("Output screen"),0,1); top.addWidget(self.screen,0,2,1,2)
-        top.addWidget(borderless,1,0); top.addWidget(move,1,1); top.addWidget(QLabel("Design"),1,2); top.addWidget(self.design,1,3)
-        top.setColumnStretch(3,1); outer.addWidget(output_card)
+        top.addWidget(self.show_output_button,0,0); top.addWidget(QLabel("Output screen"),0,1); top.addWidget(self.screen,0,2); top.addWidget(move,0,3)
+        top.addWidget(borderless,1,0); top.addWidget(QLabel("Design"),1,1); top.addWidget(self.design,1,2,1,2)
+        top.setColumnStretch(2,1); outer.addWidget(output_card)
         self.manual_data_groups=[]
         self.manual_section=CollapsibleSection("Scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
@@ -515,6 +515,7 @@ class Operator(QMainWindow):
         self.match_number=QSpinBox(); self.match_number.setRange(1,9999); self.match_number.setValue(state.match_number); self.match_number.valueChanged.connect(lambda v:state.update(match_number=v))
         self.round=QSpinBox(); self.round.setRange(1,3); self.round.setValue(state.round); self.round.valueChanged.connect(lambda v:state.update(round=v))
         self.minutes=QSpinBox(); self.minutes.setRange(0,99); self.minutes.setValue(state.seconds//60); self.seconds=QSpinBox(); self.seconds.setRange(0,59); self.seconds.setValue(state.seconds%60)
+        self.match_number.setMaximumWidth(88); self.round.setMaximumWidth(68); self.minutes.setMaximumWidth(68); self.seconds.setMaximumWidth(68)
         self.minutes.valueChanged.connect(self.set_clock); self.seconds.valueChanged.connect(self.set_clock)
         self.start=QPushButton("Start clock"); self.start.setCheckable(True); self.start.toggled.connect(self.clock_toggle)
         reset=QPushButton("Reset 1:30"); reset.clicked.connect(self.reset_clock)
@@ -534,7 +535,12 @@ class Operator(QMainWindow):
         self.restore_settings()
         QTimer.singleShot(0,lambda:self.dashboard_scroll.verticalScrollBar().setValue(0))
         QTimer.singleShot(150,lambda:self.dashboard_scroll.verticalScrollBar().setValue(0))
+        QTimer.singleShot(500,self.focus_dashboard_top)
         QTimer.singleShot(2500,lambda:self.check_for_updates() if self.auto_updates.isChecked() else None)
+
+    def focus_dashboard_top(self):
+        self.source_mode.setFocus(Qt.OtherFocusReason)
+        self.dashboard_scroll.verticalScrollBar().setValue(0)
 
     def update_group(self):
         box=QGroupBox("Application updates"); grid=QGridLayout(box)
@@ -544,8 +550,9 @@ class Operator(QMainWindow):
         self.check_update=QPushButton("Check for updates"); self.check_update.setObjectName("primaryButton"); self.check_update.setMinimumHeight(32); self.check_update.clicked.connect(self.check_for_updates)
         self.install_update=QPushButton("Download update"); self.install_update.setEnabled(False); self.install_update.clicked.connect(self.download_update)
         self.update_progress=QProgressBar(); self.update_progress.setRange(0,100); self.update_progress.setVisible(False)
-        grid.addWidget(self.update_status,0,0); grid.addWidget(self.check_update,0,1); grid.addWidget(self.install_update,0,2)
-        grid.addWidget(self.auto_updates,1,0,1,3); grid.addWidget(self.update_progress,2,0,1,3); grid.setColumnStretch(0,1)
+        grid.addWidget(self.update_status,0,0); grid.addWidget(self.auto_updates,1,0)
+        grid.addWidget(self.check_update,0,1,2,1,Qt.AlignVCenter); grid.addWidget(self.install_update,0,2,2,1,Qt.AlignVCenter)
+        grid.addWidget(self.update_progress,2,0,1,3); grid.setColumnStretch(0,1)
         self.updater.status.connect(self.update_status.setText)
         self.updater.current.connect(self.update_current)
         self.updater.available.connect(self.update_available)
@@ -597,7 +604,7 @@ class Operator(QMainWindow):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
         self.source_mode=WheelSafeComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=WheelSafeComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
-        self.host=QLineEdit("0.0.0.0"); self.port=QSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056)
+        self.host=QLineEdit("0.0.0.0"); self.port=QSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056); self.port.setButtonSymbols(QSpinBox.NoButtons)
         self.connect_button=QPushButton("Start live listener"); self.connect_button.setObjectName("primaryButton"); self.connect_button.clicked.connect(self.start_source)
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
         self.connection_status.setWordWrap(True)
@@ -672,7 +679,7 @@ class Operator(QMainWindow):
         self.show_output_button.setText("Hide output" if self.board.isVisible() else "Show output")
 
     def side_group(self,title,side):
-        box=QGroupBox(title); form=QFormLayout(box)
+        box=QGroupBox(title); form=QGridLayout(box); form.setHorizontalSpacing(8); form.setVerticalSpacing(7)
         self.manual_data_groups.append(box)
         countries=WheelSafeComboBox(); countries.setEditable(True); countries.setInsertPolicy(QComboBox.NoInsert)
         selected=0
@@ -680,13 +687,21 @@ class Operator(QMainWindow):
             alpha3=getattr(country,"alpha_3",""); countries.addItem(f"{country.name} ({alpha3})",(country.alpha_2,alpha3,country.name.upper()))
             if alpha3==side.country: selected=index
         countries.setCurrentIndex(selected); countries.currentIndexChanged.connect(lambda i,s=side,c=countries:self.select_country(s,c.itemData(i)))
-        form.addRow("Country",countries)
-        for label,field in (("Nation","nation"),("First name","first"),("Last name","last")):
-            edit=QLineEdit(getattr(side,field)); edit.textChanged.connect(lambda v,s=side,f=field:(setattr(s,f,v.upper()),self.state.changed.emit())); form.addRow(label,edit)
+        nation=QLineEdit(side.nation); nation.textChanged.connect(lambda v,s=side:(setattr(s,"nation",v.upper()),self.state.changed.emit()))
+        first=QLineEdit(side.first); first.textChanged.connect(lambda v,s=side:(setattr(s,"first",v.upper()),self.state.changed.emit()))
+        last=QLineEdit(side.last); last.textChanged.connect(lambda v,s=side:(setattr(s,"last",v.upper()),self.state.changed.emit()))
+        for field in (countries,nation,first,last): field.setMinimumWidth(70)
+        form.addWidget(QLabel("Country"),0,0); form.addWidget(countries,0,1); form.addWidget(QLabel("Nation"),0,2); form.addWidget(nation,0,3)
+        form.addWidget(QLabel("First name"),1,0); form.addWidget(first,1,1); form.addWidget(QLabel("Last name"),1,2); form.addWidget(last,1,3)
+        scoring=[]
         for label,field,maximum in (("Score","score",999),("Rounds won","rounds",3),("Gam-jeom","gamjeom",5)):
-            spin=QSpinBox(); spin.setRange(0,maximum); spin.setValue(getattr(side,field)); spin.valueChanged.connect(lambda v,s=side,f=field:(setattr(s,f,v),self.state.changed.emit())); form.addRow(label,spin)
+            spin=QSpinBox(); spin.setRange(0,maximum); spin.setValue(getattr(side,field)); spin.setMinimumWidth(62); spin.setMaximumWidth(82); spin.valueChanged.connect(lambda v,s=side,f=field:(setattr(s,f,v),self.state.changed.emit())); scoring.append((label,spin))
+        score_row=QHBoxLayout(); score_row.setContentsMargins(0,0,0,0); score_row.setSpacing(7)
+        for label,spin in scoring: score_row.addWidget(QLabel(label)); score_row.addWidget(spin)
+        score_row.addStretch(); form.addLayout(score_row,2,0,1,4)
         buttons=QHBoxLayout(); load=QPushButton("Load portrait…"); clear=QPushButton("Clear")
-        load.clicked.connect(lambda _,s=side:self.load_portrait(s)); clear.clicked.connect(lambda _,s=side:(setattr(s,"portrait",""),self.state.changed.emit())); buttons.addWidget(load); buttons.addWidget(clear); form.addRow("Portrait",buttons)
+        load.clicked.connect(lambda _,s=side:self.load_portrait(s)); clear.clicked.connect(lambda _,s=side:(setattr(s,"portrait",""),self.state.changed.emit())); buttons.addWidget(load); buttons.addWidget(clear); form.addWidget(QLabel("Portrait"),3,0); form.addLayout(buttons,3,1,1,3)
+        form.setColumnStretch(1,1); form.setColumnStretch(3,1)
         return box
 
     def select_country(self,side,data):
@@ -755,7 +770,7 @@ class Operator(QMainWindow):
 
 
 def main():
-    app=QApplication(sys.argv); app.setWindowIcon(QIcon(str(asset_path("app.ico")))); app.setStyle("Fusion"); app.setStyleSheet("""
+    app=QApplication(sys.argv); app.setWindowIcon(QIcon(str(asset_path("app.ico")))); app.setStyle("Fusion"); stylesheet="""
         QMainWindow#operatorWindow, QWidget#dashboardPage { background:#0d1117; color:#e7edf5; }
         QScrollArea#dashboardScroll { background:#0d1117; border:none; }
         QWidget { color:#dce4ee; font:10pt 'Segoe UI'; }
@@ -768,6 +783,13 @@ def main():
         QLineEdit, QComboBox, QSpinBox, QTextEdit { background:#0f141b; border:1px solid #303c4d; border-radius:6px; padding:6px 8px; color:#eef4fb; selection-background-color:#1978b8; }
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus { border:1px solid #3da9f5; }
         QComboBox::drop-down { border:none; width:24px; }
+        QComboBox::down-arrow { image:url(__DOWN_ARROW__); width:10px; height:7px; }
+        QSpinBox { padding-right:22px; }
+        QSpinBox::up-button, QSpinBox::down-button { background:#1d2632; border-left:1px solid #303c4d; width:18px; }
+        QSpinBox::up-button { border-top-right-radius:5px; border-bottom:1px solid #303c4d; }
+        QSpinBox::down-button { border-bottom-right-radius:5px; }
+        QSpinBox::up-arrow { image:url(__UP_ARROW__); width:10px; height:7px; }
+        QSpinBox::down-arrow { image:url(__DOWN_ARROW__); width:10px; height:7px; }
         QPushButton { background:#242d3a; border:1px solid #354256; border-radius:7px; padding:7px 12px; color:#e8eef6; font-weight:600; }
         QPushButton:hover { background:#303b4b; border-color:#4d6078; }
         QPushButton:pressed { background:#1d2530; }
@@ -783,7 +805,9 @@ def main():
         QScrollBar:vertical { background:#0d1117; width:10px; margin:0; }
         QScrollBar::handle:vertical { background:#354255; border-radius:5px; min-height:28px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
-    """)
+    """
+    stylesheet=stylesheet.replace("__UP_ARROW__",str(asset_path("spin-up.svg")).replace("\\","/")).replace("__DOWN_ARROW__",str(asset_path("spin-down.svg")).replace("\\","/"))
+    app.setStyleSheet(stylesheet)
     state=MatchState(); board=Scoreboard(state); operator=Operator(state,board); board.show(); operator.show(); sys.exit(app.exec())
 
 
