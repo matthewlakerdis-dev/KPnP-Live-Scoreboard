@@ -551,7 +551,6 @@ class Operator(QMainWindow):
         copy_log=QPushButton("Copy all"); copy_log.clicked.connect(self.copy_event_log)
         log_header.addWidget(clear_log); log_header.addWidget(copy_log); outer.addLayout(log_header)
         self.event_log=QTextEdit(); self.event_log.setReadOnly(True); self.event_log.setMaximumHeight(145); self.event_log.setPlaceholderText("Virtual and real KPNP events appear here…"); outer.addWidget(self.event_log)
-        outer.addWidget(QLabel("The virtual equipment uses the same event listener boundary as future real KPNP hardware."))
         self.clock_timer=QTimer(self); self.clock_timer.timeout.connect(self.clock_step); self.clock_timer.start(1000)
         self.anim=QTimer(self); self.anim.timeout.connect(self.anim_step); self.anim.start(33)
         self.output_ui_timer=QTimer(self); self.output_ui_timer.timeout.connect(self.sync_output_button); self.output_ui_timer.start(500)
@@ -631,10 +630,12 @@ class Operator(QMainWindow):
         self.connect_button=QPushButton("Start live listener"); self.connect_button.setObjectName("primaryButton"); self.connect_button.clicked.connect(self.start_source)
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
         self.connection_status.setWordWrap(False); self.connection_status.setMinimumWidth(190)
-        grid.addWidget(QLabel("Source"),0,0); grid.addWidget(self.source_mode,0,1); grid.addWidget(QLabel("Host"),0,2); grid.addWidget(self.host,0,3)
-        grid.addWidget(QLabel("Protocol"),1,0); grid.addWidget(self.transport,1,1); grid.addWidget(QLabel("Port"),1,2); grid.addWidget(self.port,1,3)
+        host_hint=QLabel("IP address of the KPnP/Daedo machine"); host_hint.setObjectName("fieldHint")
+        grid.addWidget(host_hint,0,2,1,2)
+        grid.addWidget(QLabel("Source"),1,0); grid.addWidget(self.source_mode,1,1); grid.addWidget(QLabel("Host"),1,2); grid.addWidget(self.host,1,3)
+        grid.addWidget(QLabel("Protocol"),2,0); grid.addWidget(self.transport,2,1); grid.addWidget(QLabel("Port"),2,2); grid.addWidget(self.port,2,3)
         connection_row=QHBoxLayout(); connection_row.setSpacing(8); connection_row.addStretch(1); connection_row.addWidget(self.connect_button); connection_row.addWidget(self.connection_status); connection_row.addStretch(1)
-        grid.addLayout(connection_row,2,0,1,4); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
+        grid.addLayout(connection_row,3,0,1,4); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
 
     def restore_settings(self):
         self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
@@ -800,6 +801,7 @@ def main():
         QFrame#appHeader { background:#151b24; border:1px solid #263142; border-radius:12px; }
         QLabel#appTitle { color:#ffffff; font-size:18pt; font-weight:750; }
         QLabel#appSubtitle { color:#8391a5; font-size:9pt; }
+        QLabel#fieldHint { color:#8f9aaa; font-size:8pt; font-weight:500; }
         QLabel#versionBadge { color:#83c9ff; background:#102a40; border:1px solid #24577b; border-radius:10px; padding:5px 10px; font-size:8pt; font-weight:700; }
         QGroupBox { background:#151a22; border:1px solid #2a3443; border-radius:10px; margin-top:13px; padding:16px 12px 12px; font-weight:700; color:#f3f6fa; }
         QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 6px; color:#aebbd0; }
