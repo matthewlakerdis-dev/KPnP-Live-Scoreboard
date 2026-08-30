@@ -11,7 +11,7 @@ from PySide6.QtCore import QObject, QTimer, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import QApplication
 
-from version import APP_VERSION, LATEST_RELEASE_API
+from version import APP_VERSION, LATEST_RELEASE_API, LATEST_RELEASE_MANIFEST
 
 
 def version_tuple(value: str) -> tuple[int, ...]:
@@ -39,38 +39,54 @@ class UpdateManager(QObject):
 
     def _request(self, url: str) -> QNetworkRequest:
         request = QNetworkRequest(QUrl(url))
+        request.setAttribute(QNetworkRequest.RedirectPolicyAttribute,QNetworkRequest.NoLessSafeRedirectPolicy)
         request.setRawHeader(b"Accept", b"application/vnd.github+json")
         request.setRawHeader(b"X-GitHub-Api-Version", b"2022-11-28")
         request.setRawHeader(b"User-Agent", b"KPNP-Live-Scoreboard-Updater")
+        request.setRawHeader(b"Cache-Control", b"no-cache")
         return request
 
     def check(self):
-        self.status.emit("Checking GitHub for updates…")
-        reply = self.network.get(self._request(LATEST_RELEASE_API))
-        reply.finished.connect(lambda: self._checked(reply))
+        self.status.emit("Checking for updates…")
+        self._check_url(LATEST_RELEASE_MANIFEST,True)
 
-    def _checked(self, reply: QNetworkReply):
+    def _check_url(self,url: str,allow_api_fallback: bool):
+        reply = self.network.get(self._request(url))
+        reply.finished.connect(lambda:self._checked(reply,allow_api_fallback))
+
+    def _checked(self,reply: QNetworkReply,allow_api_fallback: bool=False):
         try:
             if reply.error() != QNetworkReply.NoError:
+                if allow_api_fallback:
+                    self._check_url(LATEST_RELEASE_API,False)
+                    return
+                status=reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+                if status in (403,429):
+                    raise RuntimeError("GitHub is temporarily rate-limiting update checks; try again later or download the installer from GitHub Releases")
                 raise RuntimeError(reply.errorString())
             release = json.loads(bytes(reply.readAll()))
-            tag = str(release.get("tag_name", ""))
-            if version_tuple(tag) <= version_tuple(APP_VERSION):
-                self.asset = None
-                self.current.emit(f"Version {APP_VERSION} is up to date")
-                return
-            assets = release.get("assets") or []
-            asset = next((item for item in assets if str(item.get("name", "")).lower().endswith("setup.exe")), None)
-            if not asset:
-                raise RuntimeError("The latest release does not contain a Windows installer")
-            self.asset = asset
-            self.version = tag.removeprefix("v")
-            notes = str(release.get("body") or "No release notes were provided.")
-            self.available.emit(self.version, notes)
+            self._use_release(release)
         except Exception as exc:
             self.failed.emit(f"Update check failed: {exc}")
         finally:
             reply.deleteLater()
+
+    def _use_release(self,release: dict):
+        tag = str(release.get("tag_name", ""))
+        if not tag:
+            raise RuntimeError("The update information did not contain a version")
+        if version_tuple(tag) <= version_tuple(APP_VERSION):
+            self.asset = None
+            self.current.emit(f"Version {APP_VERSION} is up to date")
+            return
+        assets = release.get("assets") or []
+        asset = next((item for item in assets if str(item.get("name", "")).lower().endswith("setup.exe")), None)
+        if not asset:
+            raise RuntimeError("The latest release does not contain a Windows installer")
+        self.asset = asset
+        self.version = tag.removeprefix("v")
+        notes = str(release.get("body") or "No release notes were provided.")
+        self.available.emit(self.version, notes)
 
     def download(self):
         if not self.asset:

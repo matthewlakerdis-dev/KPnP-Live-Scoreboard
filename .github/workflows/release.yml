@@ -80,6 +80,20 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path pyinstaller-dist/KPNP-Live-Scoreboard/* -DestinationPath "installer-output/KPNP-Live-Scoreboard-v${{ steps.version.outputs.version }}-Portable.zip"
+          $installerName = 'KPNP-Live-Scoreboard-v3-Setup.exe'
+          $installerPath = Join-Path $PWD "installer-output/$installerName"
+          $installerHash = (Get-FileHash $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $manifest = [ordered]@{
+            schema = 1
+            tag_name = "v${{ steps.version.outputs.version }}"
+            body = 'Automatic update package'
+            assets = @([ordered]@{
+              name = $installerName
+              browser_download_url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$installerName"
+              digest = "sha256:$installerHash"
+            })
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content installer-output/update.json -Encoding utf8NoBOM
           Get-ChildItem installer-output -File | ForEach-Object {
             "$(Get-FileHash $_.FullName -Algorithm SHA256 | Select-Object -ExpandProperty Hash)  $($_.Name)"
           } | Set-Content installer-output/SHA256SUMS.txt
