@@ -20,7 +20,7 @@ from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardP
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout,
     QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-    QSpinBox, QTextEdit, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
+    QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
@@ -463,6 +463,23 @@ class Scoreboard(QWidget):
             active=i<=self.state.round-1; p.setBrush(QColor(gold if active else "#33383d")); p.setPen(QPen(QColor(gold if active else "#8d949a"),1)); p.drawEllipse(QRectF(x-2,207,21,21))
 
 
+class CollapsibleSection(QWidget):
+    def __init__(self,title,parent=None):
+        super().__init__(parent)
+        layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(4)
+        self.toggle=QToolButton(text=title,checkable=True,checked=True)
+        self.toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); self.toggle.setArrowType(Qt.DownArrow)
+        self.toggle.setStyleSheet("QToolButton{font-weight:700;text-align:left;padding:7px 9px;border:1px solid #3d4147;border-radius:4px;background:#242629;} QToolButton:hover{background:#30343a;}")
+        self.content=QWidget(); self.content_layout=QVBoxLayout(self.content); self.content_layout.setContentsMargins(0,0,0,0)
+        self.toggle.toggled.connect(self.set_expanded)
+        layout.addWidget(self.toggle); layout.addWidget(self.content)
+
+    def set_expanded(self,expanded):
+        self.toggle.blockSignals(True); self.toggle.setChecked(expanded); self.toggle.blockSignals(False)
+        self.toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.content.setVisible(expanded)
+
+
 class Operator(QMainWindow):
     def __init__(self,state,board):
         super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(850,860)
@@ -475,7 +492,9 @@ class Operator(QMainWindow):
         outer.addWidget(self.update_group())
         top=QHBoxLayout(); show=QPushButton("Show output"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output to screen"); move.clicked.connect(self.move_output); top.addWidget(show); top.addWidget(borderless); top.addWidget(QLabel("Design")); top.addWidget(self.design); top.addWidget(QLabel("Output screen")); top.addWidget(self.screen); top.addWidget(move); outer.addLayout(top)
         self.manual_data_groups=[]
-        sides=QHBoxLayout(); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); outer.addLayout(sides)
+        self.manual_section=CollapsibleSection("Manual scoreboard controls"); outer.addWidget(self.manual_section)
+        self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
+        sides=QHBoxLayout(); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); self.manual_section.content_layout.addLayout(sides)
         match=QGroupBox("Match"); grid=QGridLayout(match)
         self.match_number=QSpinBox(); self.match_number.setRange(1,9999); self.match_number.setValue(state.match_number); self.match_number.valueChanged.connect(lambda v:state.update(match_number=v))
         self.round=QSpinBox(); self.round.setRange(1,3); self.round.setValue(state.round); self.round.valueChanged.connect(lambda v:state.update(round=v))
@@ -483,7 +502,7 @@ class Operator(QMainWindow):
         self.minutes.valueChanged.connect(self.set_clock); self.seconds.valueChanged.connect(self.set_clock)
         self.start=QPushButton("Start clock"); self.start.setCheckable(True); self.start.toggled.connect(self.clock_toggle)
         reset=QPushButton("Reset 1:30"); reset.clicked.connect(self.reset_clock)
-        grid.addWidget(QLabel("Match number"),0,0); grid.addWidget(self.match_number,0,1); grid.addWidget(QLabel("Round"),0,2); grid.addWidget(self.round,0,3); grid.addWidget(QLabel("Time"),0,4); grid.addWidget(self.minutes,0,5); grid.addWidget(QLabel(":"),0,6); grid.addWidget(self.seconds,0,7); grid.addWidget(self.start,0,8); grid.addWidget(reset,0,9); outer.addWidget(match)
+        grid.addWidget(QLabel("Match number"),0,0); grid.addWidget(self.match_number,0,1); grid.addWidget(QLabel("Round"),0,2); grid.addWidget(self.round,0,3); grid.addWidget(QLabel("Time"),0,4); grid.addWidget(self.minutes,0,5); grid.addWidget(QLabel(":"),0,6); grid.addWidget(self.seconds,0,7); grid.addWidget(self.start,0,8); grid.addWidget(reset,0,9); self.manual_section.content_layout.addWidget(match)
         self.manual_data_groups.append(match)
         self.sim_box=self.simulator_group(); outer.addWidget(self.sim_box)
         log_header=QHBoxLayout(); log_header.addWidget(QLabel("Listener output")); log_header.addStretch()
@@ -566,10 +585,10 @@ class Operator(QMainWindow):
         grid.addWidget(self.connect_button,2,0,1,2); grid.addWidget(self.connection_status,2,2,1,2); return box
 
     def restore_settings(self):
-        self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
+        self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
 
     def save_settings(self):
-        self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex())
+        self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex()); self.settings.setValue("manual_controls_expanded",self.manual_section.toggle.isChecked())
 
     def design_changed(self,design): self.board.set_design(design); self.save_settings()
 
