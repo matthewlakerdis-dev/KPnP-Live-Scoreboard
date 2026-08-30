@@ -626,6 +626,7 @@ class Operator(QMainWindow):
 
     def connection_group(self):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
+        box.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
         self.source_mode=WheelSafeComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=WheelSafeComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
         self.host=QLineEdit("0.0.0.0"); self.port=WheelSafeSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056); self.port.setButtonSymbols(QSpinBox.NoButtons)
