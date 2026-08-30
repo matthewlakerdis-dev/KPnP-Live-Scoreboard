@@ -1,6 +1,7 @@
 """Daedo TkStrike/TrueScore UDP event listener and scoreboard normalizer."""
 
 import json
+import math
 import re
 
 import pycountry
@@ -193,15 +194,20 @@ class DaedoListener(KPNPListener):
         if isinstance(value, (int, float)):
             value = int(value)
             return max(0, value // 1000 if value > 3600 else value)
-        matches = re.findall(r"\d+", str(value))
-        if not matches:
-            return None
-        numbers = [int(item) for item in matches]
-        if len(numbers) >= 3:
-            return numbers[-3] * 3600 + numbers[-2] * 60 + numbers[-1]
-        if len(numbers) == 2:
-            return numbers[0] * 60 + numbers[1]
-        return numbers[0]
+        text = str(value).strip()
+        try:
+            parts = text.split(":")
+            if len(parts) == 2:
+                # TkStrike's real countdown format is MM:SS.mmm. Round up the
+                # fractional second so 01:59.999 remains 2:00 on a seconds-only
+                # broadcast clock, matching TkStrike's visible timer.
+                return max(0, int(math.ceil(int(parts[0]) * 60 + float(parts[1]))))
+            if len(parts) == 3:
+                return max(0, int(math.ceil(int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2]))))
+            return max(0, int(math.ceil(float(text))))
+        except ValueError:
+            matches = re.findall(r"\d+", text)
+            return int(matches[0]) if matches else None
 
     def _decode_rt_broadcast(self, message):
         printable = "".join(char for char in message if char.isprintable()).strip()
