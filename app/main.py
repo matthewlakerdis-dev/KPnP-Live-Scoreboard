@@ -18,7 +18,7 @@ if sys.platform == "win32":
 
 from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardPaths, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
     QScrollArea, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
@@ -40,8 +40,22 @@ def asset_path(*parts):
     return root.joinpath("assets", *parts)
 
 
+def fit_combo_to_items(combo):
+    """Use only the width needed by the longest choice plus its arrow."""
+    text_width=max((combo.fontMetrics().horizontalAdvance(combo.itemText(i)) for i in range(combo.count())),default=0)
+    combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+    combo.setFixedWidth(text_width+50)
+
+
 class WheelSafeComboBox(QComboBox):
     """Keep dashboard scrolling from changing a selection by accident."""
+
+    def wheelEvent(self,event):
+        event.ignore()
+
+
+class WheelSafeSpinBox(QSpinBox):
+    """Let the mouse wheel scroll the dashboard, never alter a number."""
 
     def wheelEvent(self,event):
         event.ignore()
@@ -499,25 +513,24 @@ class Operator(QMainWindow):
         root=QWidget(); root.setObjectName("dashboardPage"); self.dashboard_scroll.setWidget(root); outer=QVBoxLayout(root); outer.setContentsMargins(12,12,12,14); outer.setSpacing(8)
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
-        output_card=QGroupBox("Output"); top=QVBoxLayout(output_card); top.setSpacing(6)
+        output_card=QGroupBox("Output"); top=QGridLayout(output_card); top.setHorizontalSpacing(7); top.setVerticalSpacing(6)
         self.show_output_button=QPushButton("Show output"); self.show_output_button.setObjectName("primaryButton"); self.show_output_button.clicked.connect(self.toggle_output)
         borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
         self.design=WheelSafeComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
         self.screen=WheelSafeComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output"); move.clicked.connect(self.move_output)
-        output_row=QHBoxLayout(); output_row.setSpacing(6)
-        output_row.addWidget(self.show_output_button); output_row.addWidget(QLabel("Output screen")); output_row.addWidget(self.screen,1); output_row.addWidget(move)
-        design_row=QHBoxLayout(); design_row.setSpacing(6); design_row.addStretch(1)
-        design_row.addWidget(borderless); design_row.addWidget(QLabel("Design")); self.design.setMaximumWidth(230); design_row.addWidget(self.design); design_row.addStretch(1)
-        top.addLayout(output_row); top.addLayout(design_row); outer.addWidget(output_card)
+        for combo in (self.screen,self.design): fit_combo_to_items(combo)
+        top.addWidget(self.show_output_button,0,0); top.addWidget(QLabel("Output screen"),0,1); top.addWidget(self.screen,0,2); top.addWidget(move,0,3)
+        top.addWidget(borderless,1,0); top.addWidget(QLabel("Design"),1,1); top.addWidget(self.design,1,2)
+        top.setColumnStretch(4,1); outer.addWidget(output_card)
         self.manual_data_groups=[]
         self.manual_section=CollapsibleSection("Scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
         sides=QVBoxLayout(); sides.setSpacing(8); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); self.manual_section.content_layout.addLayout(sides)
         match=QGroupBox("Match"); grid=QVBoxLayout(match); grid.setSpacing(7)
-        self.match_number=QSpinBox(); self.match_number.setRange(1,9999); self.match_number.setValue(state.match_number); self.match_number.valueChanged.connect(lambda v:state.update(match_number=v))
-        self.round=QSpinBox(); self.round.setRange(1,3); self.round.setValue(state.round); self.round.valueChanged.connect(lambda v:state.update(round=v))
-        self.minutes=QSpinBox(); self.minutes.setRange(0,99); self.minutes.setValue(state.seconds//60); self.seconds=QSpinBox(); self.seconds.setRange(0,59); self.seconds.setValue(state.seconds%60)
-        self.match_number.setMaximumWidth(76); self.round.setMaximumWidth(56); self.minutes.setMaximumWidth(56); self.seconds.setMaximumWidth(56)
+        self.match_number=WheelSafeSpinBox(); self.match_number.setRange(1,9999); self.match_number.setValue(state.match_number); self.match_number.valueChanged.connect(lambda v:state.update(match_number=v))
+        self.round=WheelSafeSpinBox(); self.round.setRange(1,3); self.round.setValue(state.round); self.round.valueChanged.connect(lambda v:state.update(round=v))
+        self.minutes=WheelSafeSpinBox(); self.minutes.setRange(0,99); self.minutes.setValue(state.seconds//60); self.seconds=WheelSafeSpinBox(); self.seconds.setRange(0,59); self.seconds.setValue(state.seconds%60)
+        self.match_number.setFixedWidth(90); self.round.setFixedWidth(72); self.minutes.setFixedWidth(72); self.seconds.setFixedWidth(72)
         self.minutes.valueChanged.connect(self.set_clock); self.seconds.valueChanged.connect(self.set_clock)
         self.start=QPushButton("Start clock"); self.start.setCheckable(True); self.start.toggled.connect(self.clock_toggle)
         reset=QPushButton("Reset 1:30"); reset.clicked.connect(self.reset_clock)
@@ -613,13 +626,14 @@ class Operator(QMainWindow):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
         self.source_mode=WheelSafeComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=WheelSafeComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
-        self.host=QLineEdit("0.0.0.0"); self.port=QSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056); self.port.setButtonSymbols(QSpinBox.NoButtons)
+        self.host=QLineEdit("0.0.0.0"); self.port=WheelSafeSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056); self.port.setButtonSymbols(QSpinBox.NoButtons)
         self.connect_button=QPushButton("Start live listener"); self.connect_button.setObjectName("primaryButton"); self.connect_button.clicked.connect(self.start_source)
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
-        self.connection_status.setWordWrap(True)
+        self.connection_status.setWordWrap(False); self.connection_status.setMinimumWidth(190)
         grid.addWidget(QLabel("Source"),0,0); grid.addWidget(self.source_mode,0,1); grid.addWidget(QLabel("Host"),0,2); grid.addWidget(self.host,0,3)
         grid.addWidget(QLabel("Protocol"),1,0); grid.addWidget(self.transport,1,1); grid.addWidget(QLabel("Port"),1,2); grid.addWidget(self.port,1,3)
-        grid.addWidget(self.connect_button,2,0,1,2); grid.addWidget(self.connection_status,2,2,1,2); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
+        connection_row=QHBoxLayout(); connection_row.setSpacing(8); connection_row.addStretch(1); connection_row.addWidget(self.connect_button); connection_row.addWidget(self.connection_status); connection_row.addStretch(1)
+        grid.addLayout(connection_row,2,0,1,4); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
 
     def restore_settings(self):
         self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
@@ -706,14 +720,12 @@ class Operator(QMainWindow):
         form.addWidget(QLabel("First name"),1,0); form.addWidget(first,1,1); form.addWidget(QLabel("Last name"),1,2); form.addWidget(last,1,3)
         scoring=[]
         for label,field,maximum in (("Score","score",999),("Rounds won","rounds",3),("Gam-jeom","gamjeom",5)):
-            spin=QSpinBox(); spin.setRange(0,maximum); spin.setValue(getattr(side,field)); spin.setMinimumWidth(62); spin.setMaximumWidth(82); spin.valueChanged.connect(lambda v,s=side,f=field:(setattr(s,f,v),self.state.changed.emit())); scoring.append((label,spin))
+            spin=WheelSafeSpinBox(); spin.setRange(0,maximum); spin.setValue(getattr(side,field)); spin.setMinimumWidth(70); spin.setMaximumWidth(82); spin.valueChanged.connect(lambda v,s=side,f=field:(setattr(s,f,v),self.state.changed.emit())); scoring.append((label,spin))
         score_row=QHBoxLayout(); score_row.setContentsMargins(8,0,8,0); score_row.setSpacing(5); score_row.addStretch(1)
         for index,(label,spin) in enumerate(scoring):
             score_row.addWidget(QLabel(label)); score_row.addWidget(spin)
             if index < len(scoring)-1: score_row.addSpacing(9)
         score_row.addStretch(1); form.addLayout(score_row,2,0,1,4)
-        buttons=QHBoxLayout(); load=QPushButton("Load portrait…"); clear=QPushButton("Clear")
-        load.clicked.connect(lambda _,s=side:self.load_portrait(s)); clear.clicked.connect(lambda _,s=side:(setattr(s,"portrait",""),self.state.changed.emit())); buttons.addWidget(load); buttons.addWidget(clear); form.addWidget(QLabel("Portrait"),3,0); form.addLayout(buttons,3,1,1,3)
         form.setColumnStretch(1,1); form.setColumnStretch(3,1)
         return box
 
@@ -721,9 +733,6 @@ class Operator(QMainWindow):
         if data:
             side.alpha2,side.country,side.nation=data; self.state.changed.emit()
 
-    def load_portrait(self,side):
-        path,_=QFileDialog.getOpenFileName(self,"Choose athlete portrait","","Images (*.png *.jpg *.jpeg *.webp *.bmp)")
-        if path: side.portrait=path; self.state.changed.emit()
     def set_clock(self): self.state.update(seconds=self.minutes.value()*60+self.seconds.value())
     def clock_toggle(self,on): self.state.running=on; self.start.setText("Pause clock" if on else "Start clock")
     def reset_clock(self): self.state.running=False; self.start.setChecked(False); self.minutes.setValue(1); self.seconds.setValue(30); self.set_clock()
@@ -744,7 +753,7 @@ class Operator(QMainWindow):
         box=QGroupBox("Virtual KPNP equipment"); layout=QVBoxLayout(box)
         top=QHBoxLayout(); self.sim_connected=QCheckBox("Connected"); self.sim_connected.toggled.connect(lambda on:self.simulator.connect_equipment() if on else self.simulator.disconnect_equipment())
         self.sim_auto=QCheckBox("Automatic match"); self.sim_auto.toggled.connect(self.simulator.set_automatic)
-        self.sim_strength=QSpinBox(); self.sim_strength.setRange(1,100); self.sim_strength.setValue(70); self.sim_strength.setSuffix("% PSS")
+        self.sim_strength=WheelSafeSpinBox(); self.sim_strength.setRange(1,100); self.sim_strength.setValue(70); self.sim_strength.setSuffix("% PSS")
         top.addWidget(self.sim_connected); top.addWidget(self.sim_auto); top.addWidget(QLabel("Hit strength")); top.addWidget(self.sim_strength); layout.addLayout(top)
         hits=QHBoxLayout()
         for label,callback in (("Blue hit",lambda:self.simulator.hit("blue",self.sim_strength.value())),("Simultaneous hit",lambda:self.simulator.simultaneous_hit(self.sim_strength.value())),("Red hit",lambda:self.simulator.hit("red",self.sim_strength.value()))):
