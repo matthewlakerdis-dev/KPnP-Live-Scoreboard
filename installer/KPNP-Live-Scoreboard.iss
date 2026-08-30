@@ -1,6 +1,6 @@
 #define MyAppName "KPNP Live Scoreboard"
 #ifndef MyAppVersion
-  #define MyAppVersion "3.7.19"
+  #define MyAppVersion "3.7.20"
 #endif
 #define MyAppExeName "KPNP-Live-Scoreboard.exe"
 

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
+from daedo_listener import DaedoListener
 from simulator import KPNPEquipmentSimulator
 from updater import UpdateManager
 from version import APP_VERSION
@@ -507,7 +508,10 @@ class Operator(QMainWindow):
         super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(640,860); self.setMinimumWidth(600)
         self.setObjectName("operatorWindow")
         self.setWindowIcon(QIcon(str(asset_path("app.ico"))))
-        self.listener=KPNPListener(self); self.simulator=KPNPEquipmentSimulator(self); self.simulator.packet.connect(self.listener.feed); self.listener.packet.connect(self.apply_packet); self.listener.status.connect(self.listener_status)
+        self.kpnp_listener=KPNPListener(self); self.daedo_listener=DaedoListener(self); self.listener=self.kpnp_listener
+        for listener in (self.kpnp_listener,self.daedo_listener):
+            listener.packet.connect(self.apply_packet); listener.status.connect(self.listener_status)
+        self.simulator=KPNPEquipmentSimulator(self); self.simulator.packet.connect(self.route_simulator_packet)
         self.settings=QSettings("KPNP Scoreboard","Live Scoreboard v3")
         self.updater=UpdateManager(self)
         self.dashboard_scroll=QScrollArea(); self.dashboard_scroll.setObjectName("dashboardScroll"); self.dashboard_scroll.setWidgetResizable(True); self.dashboard_scroll.setFrameShape(QFrame.NoFrame); self.dashboard_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.setCentralWidget(self.dashboard_scroll)
@@ -627,7 +631,7 @@ class Operator(QMainWindow):
     def connection_group(self):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
         box.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
-        self.scoring_program=WheelSafeComboBox(); self.scoring_program.addItems(("KPnP/TKDScoring","Daedo/TrueScore")); self.scoring_program.currentIndexChanged.connect(lambda _:self.save_settings())
+        self.scoring_program=WheelSafeComboBox(); self.scoring_program.addItems(("KPnP/TKDScoring","Daedo/TrueScore")); self.scoring_program.currentIndexChanged.connect(self.program_changed)
         self.source_mode=WheelSafeComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=WheelSafeComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
         self.host=QLineEdit("0.0.0.0"); self.port=WheelSafeSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056); self.port.setButtonSymbols(QSpinBox.NoButtons)
@@ -643,7 +647,12 @@ class Operator(QMainWindow):
         grid.addLayout(connection_row,3,0,1,4); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
 
     def restore_settings(self):
-        self.scoring_program.setCurrentIndex(self.settings.value("program",0,int)); self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
+        self.scoring_program.blockSignals(True); self.scoring_program.setCurrentIndex(self.settings.value("program",0,int)); self.scoring_program.blockSignals(False)
+        self.listener=self.daedo_listener if self.scoring_program.currentIndex()==1 else self.kpnp_listener
+        self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",9988 if self.scoring_program.currentIndex()==1 else 8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText())
+        if self.scoring_program.currentIndex()==1 and self.port.value()==8056 and not self.settings.value("daedo_port_initialized",False,bool):
+            self.port.setValue(9988); self.transport.setCurrentText("UDP"); self.settings.setValue("daedo_port_initialized",True)
+        self.program_changed(self.scoring_program.currentIndex(),False)
 
     def save_settings(self):
         self.settings.setValue("program",self.scoring_program.currentIndex()); self.settings.setValue("source",self.source_mode.currentIndex()); self.settings.setValue("transport",self.transport.currentIndex()); self.settings.setValue("host",self.host.text()); self.settings.setValue("port",self.port.value()); self.settings.setValue("design",self.design.currentText()); self.settings.setValue("screen",self.screen.currentIndex())
@@ -653,10 +662,34 @@ class Operator(QMainWindow):
 
     def closeEvent(self,event):
         self.save_settings()
-        self.listener.stop()
+        self.kpnp_listener.stop(); self.daedo_listener.stop()
         self.simulator.disconnect_equipment()
         self.board.close()
         super().closeEvent(event)
+
+    def program_changed(self,index,reset_defaults=True):
+        previous=self.listener
+        previous.stop()
+        self.listener=self.daedo_listener if index==1 else self.kpnp_listener
+        daedo=index==1
+        current_source=self.source_mode.currentIndex()
+        self.source_mode.blockSignals(True)
+        self.source_mode.clear()
+        self.source_mode.addItems(("Live Daedo/TrueScore application","Virtual Daedo equipment") if daedo else ("Live KPNP application","Virtual KPNP equipment"))
+        self.source_mode.setCurrentIndex(max(0,current_source))
+        self.source_mode.blockSignals(False)
+        if hasattr(self,"sim_box"): self.sim_box.setTitle("Virtual Daedo equipment" if daedo else "Virtual KPNP equipment")
+        if hasattr(self,"event_log"): self.event_log.setPlaceholderText(f"Virtual and real {'Daedo' if daedo else 'KPNP'} events appear here…")
+        if daedo:
+            help_text="In TkStrike: Configuration → External → External UDP Event Listeners. Add this scoreboard computer's IP address and port 9988, then Save."
+            self.connect_button.setToolTip(help_text); self.connection_status.setToolTip(help_text)
+        else:
+            self.connect_button.setToolTip(""); self.connection_status.setToolTip("")
+        if reset_defaults:
+            self.transport.setCurrentText("UDP" if daedo else "Auto detect")
+            self.port.setValue(9988 if daedo else 8056)
+            if daedo: self.settings.setValue("daedo_port_initialized",True)
+        self.source_changed(self.source_mode.currentIndex())
 
     def source_changed(self,index):
         virtual=index==1
@@ -666,12 +699,14 @@ class Operator(QMainWindow):
         for group in getattr(self,"manual_data_groups",()): group.setEnabled(virtual)
         self.host.setEnabled(not virtual); self.port.setEnabled(not virtual); self.transport.setEnabled(not virtual)
         self.connect_button.setText("Connect virtual equipment" if virtual else "Start live listener")
-        self.connection_status.setText("Ready for virtual testing" if virtual else "Live KPNP decoder awaiting protocol capture")
+        program="Daedo" if self.scoring_program.currentIndex()==1 else "KPNP"
+        self.connection_status.setText(f"Ready for virtual {program} testing" if virtual else f"Live {program} decoder ready")
         self.save_settings()
 
     def start_source(self):
+        program="Daedo" if self.scoring_program.currentIndex()==1 else "KPNP"
         if self.source_mode.currentIndex()==1:
-            self.simulator.connect_equipment(); self.sim_connected.setChecked(True); self.connection_status.setText("Virtual KPNP connected"); self.connection_status.setStyleSheet("color:#35c759;font-weight:700")
+            self.simulator.connect_equipment(); self.sim_connected.setChecked(True); self.connection_status.setText(f"Virtual {program} connected"); self.connection_status.setStyleSheet("color:#35c759;font-weight:700")
         else:
             transport=self.transport.currentText()
             if transport not in ("Auto detect","UDP","TCP"):
@@ -684,12 +719,15 @@ class Operator(QMainWindow):
 
     def listener_status(self,message):
         self.connection_status.setText(message)
-        good=message.startswith(("Listening","Waiting","KPNP connected"))
+        good=message.startswith(("Listening","Waiting","KPNP connected","Daedo connected"))
         self.connection_status.setStyleSheet(f"color:{'#35c759' if good else '#ff9f0a'};font-weight:700")
         if hasattr(self,"event_log"):
             self.event_log.append(f"[Listener] {message}")
             if message.startswith(("Listening","Waiting")):
                 self.event_log.append(f"[Capture] {self.listener.capture_path}")
+
+    def route_simulator_packet(self,packet):
+        self.listener.feed(packet)
 
     def copy_event_log(self):
         QApplication.clipboard().setText(self.event_log.toPlainText())

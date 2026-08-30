@@ -12,7 +12,7 @@ Windows releases use Python 3.12 and the pinned, matched PySide6 6.8.3 runtime. 
 
 The installer also removes generated DLL, extension-module and package folders left by older Nuitka or PyInstaller versions before copying a new release. Application settings and KPNP connection details remain in the user's application-data folder.
 
-The setup dashboard remembers the selected Live/Virtual source, transport, host, port and output monitor. Live KPNP mode is reserved for the real protocol decoder once genuine KPNP traffic has been captured; Virtual Equipment mode is fully operational now.
+The setup dashboard remembers the selected scoring program, Live/Virtual source, transport, host, port and output monitor. Live KPnP/TKDScoring and Daedo/TrueScore each use their own protocol decoder; Virtual Equipment mode remains available for safe testing.
 
 ## Run
 
@@ -27,6 +27,14 @@ The **Virtual KPNP equipment** panel can connect/disconnect a simulated device, 
 ## KPNP integration
 
 `app/kpnp_listener.py` is the stable adapter boundary for a future decoded KPNP data feed. The virtual equipment already uses this boundary, so a real packet decoder can replace it without changing the scoreboard or match-state logic.
+
+## Daedo / TrueScore integration
+
+Select **Daedo/TrueScore** as the Program and **Live Daedo/TrueScore application** as the Source. The dashboard automatically selects UDP port **9988**.
+
+In Daedo TkStrike Gen2, open **Configuration → External → General**. Under **External UDP Event Listeners**, add the IP address of the computer running this scoreboard and port **9988**, then save the TkStrike configuration. Back in the scoreboard, choose **Start live listener** before loading or starting the match in TkStrike.
+
+The Daedo listener consumes TkStrike's native JSON match configuration and event datagrams. It updates athlete names, flags, match number, round, timer, running/timeout state, scores, Gam-jeoms, round wins and PSS hit strength, and resets the output when TkStrike reports that the match has finished. Raw Daedo datagrams are retained in `daedo_raw_capture.log` beside the existing KPnP capture for troubleshooting.
 
 Run `build_windows.bat` with 64-bit Python 3.13 to rebuild the Qt-native standalone application using PyInstaller. Run `build_installer.bat` with Inno Setup 6 installed to rebuild the Setup executable.
 

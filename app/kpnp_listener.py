@@ -36,6 +36,9 @@ SPORT_CODE_TO_ISO2 = {
 class KPNPListener(QObject):
     packet = Signal(dict)
     status = Signal(str)
+    program_name = "KPNP"
+    raw_event_name = "raw_kpnp"
+    capture_filename = "kpnp_raw_capture.log"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,7 +49,7 @@ class KPNPListener(QObject):
         self._current_round = None
         data_root = Path(os.environ.get("APPDATA", Path.home())) / "KPNP Scoreboard"
         data_root.mkdir(parents=True, exist_ok=True)
-        self.capture_path = data_root / "kpnp_raw_capture.log"
+        self.capture_path = data_root / self.capture_filename
 
     def start_udp(self, host="0.0.0.0", port=8056):
         self.stop()
@@ -73,14 +76,14 @@ class KPNPListener(QObject):
             server.listen(1)
             server.settimeout(1.0)
             self._socket = server
-            self.status.emit(f"Waiting for KPNP TCP/IP on {host}:{port}")
+            self.status.emit(f"Waiting for {self.program_name} TCP/IP on {host}:{port}")
             while self._running:
                 if connection is None:
                     try:
                         connection, address = server.accept()
                         connection.settimeout(1.0)
                         self._peer = address[0]
-                        self.status.emit(f"KPNP connected from {address[0]}")
+                        self.status.emit(f"{self.program_name} connected from {address[0]}")
                     except socket.timeout:
                         continue
                 try:
@@ -88,7 +91,7 @@ class KPNPListener(QObject):
                     if not data:
                         connection.close()
                         connection = None
-                        self.status.emit(f"Waiting for KPNP TCP/IP on {host}:{port}")
+                        self.status.emit(f"Waiting for {self.program_name} TCP/IP on {host}:{port}")
                         continue
                 except socket.timeout:
                     continue
@@ -104,7 +107,7 @@ class KPNPListener(QObject):
                         self._capture(message, address)
                         self._decode(message)
         except OSError as error:
-            self.status.emit(f"KPNP TCP listener error: {error}")
+            self.status.emit(f"{self.program_name} TCP listener error: {error}")
         finally:
             for item in (connection, server):
                 if item is not None:
@@ -123,7 +126,7 @@ class KPNPListener(QObject):
             sock.bind((host, port))
             sock.settimeout(1.0)
             self._socket = sock
-            self.status.emit(f"Listening for KPNP on UDP {host}:{port}")
+            self.status.emit(f"Listening for {self.program_name} on UDP {host}:{port}")
             while self._running:
                 try:
                     data, address = sock.recvfrom(65535)
@@ -140,7 +143,7 @@ class KPNPListener(QObject):
                         self._capture(message, address)
                         self._decode(message)
         except OSError as error:
-            self.status.emit(f"KPNP UDP listener error: {error}")
+            self.status.emit(f"{self.program_name} UDP listener error: {error}")
         finally:
             if self._socket is not None:
                 try:
@@ -153,11 +156,11 @@ class KPNPListener(QObject):
     def _capture(self, message, address):
         if self._peer != address[0]:
             self._peer = address[0]
-            self.status.emit(f"KPNP connected from {address[0]}")
+            self.status.emit(f"{self.program_name} connected from {address[0]}")
         timestamp = datetime.now().isoformat(timespec="milliseconds")
         with self.capture_path.open("a", encoding="utf-8") as capture:
             capture.write(f"{timestamp}\t{address[0]}:{address[1]}\t{message}\n")
-        self.packet.emit({"event": "raw_kpnp", "message": message, "source": address[0]})
+        self.packet.emit({"event": self.raw_event_name, "message": message, "source": address[0]})
 
     def _decode(self, message):
         parts = [part.strip() for part in message.split(";")]
@@ -304,7 +307,7 @@ class KPNPListener(QObject):
                 sock.close()
             except OSError:
                 pass
-        self.status.emit("KPNP listener stopped")
+        self.status.emit(f"{self.program_name} listener stopped")
 
     def feed(self, packet):
         """Accept a normalized packet from virtual equipment or a decoder."""
