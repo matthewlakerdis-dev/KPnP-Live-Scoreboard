@@ -44,7 +44,7 @@ def fit_combo_to_items(combo):
     """Use only the width needed by the longest choice plus its arrow."""
     text_width=max((combo.fontMetrics().horizontalAdvance(combo.itemText(i)) for i in range(combo.count())),default=0)
     combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-    combo.setFixedWidth(text_width+50)
+    combo.setFixedWidth(text_width+66)
 
 
 class WheelSafeComboBox(QComboBox):
