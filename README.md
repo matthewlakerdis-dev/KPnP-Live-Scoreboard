@@ -8,6 +8,8 @@ Run `installer-output\KPNP-Live-Scoreboard-v3-Setup.exe`. The installer creates 
 
 Version 3.6 adds verified in-app updates from this repository's GitHub Releases. The first update-enabled version must be installed normally. Later releases can be checked, downloaded and installed from the clearly visible **Application updates** section near the top of the operator dashboard.
 
+Windows system runtime DLLs are deliberately not bundled. Each installation uses the compatible Universal CRT and API-set libraries supplied by its own Windows version, avoiding QtCore startup failures caused by runtime files copied from a newer build machine.
+
 The setup dashboard remembers the selected Live/Virtual source, transport, host, port and output monitor. Live KPNP mode is reserved for the real protocol decoder once genuine KPNP traffic has been captured; Virtual Equipment mode is fully operational now.
 
 ## Run

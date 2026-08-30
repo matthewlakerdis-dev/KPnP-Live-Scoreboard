@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   windows-release:
-    runs-on: windows-latest
+    # Build on Server 2022 rather than the newest runner so the package stays
+    # compatible with supported Windows 10 and Windows 11 installations.
+    runs-on: windows-2022
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -45,6 +47,20 @@ jobs:
           --name KPNP-Live-Scoreboard --icon assets/app.ico
           --add-data "$PWD/assets;assets" --distpath pyinstaller-dist
           --workpath pyinstaller-build app/main.py
+
+      - name: Remove build-machine Windows runtimes
+        shell: pwsh
+        run: |
+          $runtimeDir = Join-Path $PWD 'pyinstaller-dist\KPNP-Live-Scoreboard\_internal'
+          Get-ChildItem -LiteralPath $runtimeDir -Filter 'api-ms-win-*.dll' -File | Remove-Item -Force
+          $ucrt = Join-Path $runtimeDir 'ucrtbase.dll'
+          if (Test-Path -LiteralPath $ucrt) {
+            Remove-Item -LiteralPath $ucrt -Force
+          }
+          $remaining = @(Get-ChildItem -LiteralPath $runtimeDir -Filter 'api-ms-win-*.dll' -File).Count
+          if ($remaining -ne 0 -or (Test-Path -LiteralPath $ucrt)) {
+            throw 'Windows system runtime DLLs remain in the release package'
+          }
 
       - name: Install Inno Setup
         shell: pwsh
