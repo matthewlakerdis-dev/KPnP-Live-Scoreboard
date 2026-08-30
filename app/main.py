@@ -20,7 +20,7 @@ from PySide6.QtCore import QDir, QObject, QPointF, QRectF, QSettings, QStandardP
 from PySide6.QtGui import QBrush, QColor, QFont, QFontDatabase, QFontMetricsF, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox,
     QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
-    QScrollArea, QSizePolicy, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar, QListView)
+    QScrollArea, QSizePolicy, QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget, QMessageBox, QProgressBar, QListView, QStyle, QStyleOptionGroupBox)
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 import pycountry
 from kpnp_listener import KPNPListener
@@ -491,14 +491,27 @@ class Scoreboard(QWidget):
             active=i<=self.state.round-1; p.setBrush(QColor(gold if active else "#33383d")); p.setPen(QPen(QColor(gold if active else "#8d949a"),1)); p.drawEllipse(QRectF(x-2,207,21,21))
 
 
-class CollapsibleSection(QWidget):
+class SectionHeadingToggle(QToolButton):
+    def paintEvent(self,event):
+        # The group box paints the text and border. Draw only the chevron here,
+        # avoiding both a button surface and font-dependent arrow characters.
+        painter=QPainter(self); painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen); painter.setBrush(QColor("#aebbd0"))
+        x=6; y=self.height()/2
+        points=([(x,y-2),(x+6,y-2),(x+3,y+2)] if self.isChecked()
+                else [(x+1,y-3),(x+5,y),(x+1,y+3)])
+        painter.drawPolygon(QPolygonF([QPointF(px,py) for px,py in points]))
+
+
+class CollapsibleSection(QGroupBox):
     """One framed card with a keyboard-accessible toggle in its top border."""
     def __init__(self,title,parent=None):
         super().__init__(parent)
+        self._title=title; self.setObjectName("scoreboardResults")
         self.setSizePolicy(QSizePolicy.Preferred,QSizePolicy.Maximum)
         self._expanded=True
         self.card_layout=QVBoxLayout(self); self.card_layout.setSpacing(0)
-        self.toggle=QToolButton(self); self.toggle.setText(title); self.toggle.setCheckable(True); self.toggle.setChecked(True)
+        self.toggle=SectionHeadingToggle(self); self.toggle.setCheckable(True); self.toggle.setChecked(True)
         self.toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); self.toggle.setArrowType(Qt.DownArrow)
         self.toggle.setObjectName("sectionHeading"); self.toggle.setFocusPolicy(Qt.StrongFocus)
         self.toggle.setAccessibleName(title)
@@ -509,25 +522,22 @@ class CollapsibleSection(QWidget):
         self.set_expanded(True)
 
     def title(self):
-        return self.toggle.text()
+        return self._title
 
     def _layout_heading(self):
-        self.toggle.adjustSize(); self.toggle.move(16,0); self.toggle.raise_()
-        self.card_layout.setContentsMargins(8,self.toggle.height()+8,8,24 if self._expanded else 8)
-        self.setMinimumWidth(self.toggle.width()+32)
+        option=QStyleOptionGroupBox(); self.initStyleOption(option)
+        heading=self.style().subControlRect(QStyle.CC_GroupBox,option,QStyle.SC_GroupBoxLabel,self)
+        self.toggle.setGeometry(heading); self.toggle.raise_()
+        self.card_layout.setContentsMargins(8,8,8,24 if self._expanded else 8)
+        self.setMinimumWidth(heading.right()+16)
 
     def resizeEvent(self,event):
         super().resizeEvent(event)
         self._layout_heading()
 
-    def paintEvent(self,event):
-        painter=QPainter(self); painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor("#2a3443"),1)); painter.setBrush(QColor("#151a22"))
-        top=self.toggle.height()/2
-        painter.drawRoundedRect(QRectF(.5,top,self.width()-1,self.height()-top-1),10,10)
-
     def set_expanded(self,expanded):
         self._expanded=bool(expanded)
+        self.setTitle("    "+self._title)
         self.toggle.blockSignals(True); self.toggle.setChecked(expanded); self.toggle.blockSignals(False)
         self.toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
         self.toggle.setToolTip("Collapse scoreboard results" if expanded else "Expand scoreboard results")
@@ -905,6 +915,7 @@ def apply_dashboard_theme(app):
         QLabel#versionBadge { color:#83c9ff; background:#102a40; border:1px solid #24577b; border-radius:10px; padding:5px 10px; font-size:8pt; font-weight:700; }
         QGroupBox { background:#151a22; border:1px solid #2a3443; border-radius:10px; margin-top:13px; padding:16px 12px 12px; font-weight:700; color:#f3f6fa; }
         QGroupBox::title { subcontrol-origin:margin; left:12px; padding:0 6px; color:#aebbd0; }
+        QGroupBox#scoreboardResults { padding:8px 0 0; }
         QLineEdit, QComboBox, QSpinBox, QTextEdit { background:#0f141b; border:1px solid #536176; border-radius:6px; padding:6px 8px; color:#eef4fb; selection-background-color:#166699; selection-color:#ffffff; }
         QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QTextEdit:disabled { background:#1b222d; color:#a8b3c2; border-color:#354256; }
         QLabel:disabled, QCheckBox:disabled, QGroupBox:disabled { color:#a8b3c2; }
@@ -937,9 +948,7 @@ def apply_dashboard_theme(app):
         QPushButton#primaryButton:hover { background:#166699; }
         QPushButton#primaryButton:disabled { color:#a8b3c2; background:#171c24; border-color:#354256; }
         QPushButton:focus, QToolButton:focus { border:1px solid #83c9ff; }
-        QToolButton#sectionHeading { background:#151a22; border:1px solid transparent; border-radius:3px; padding:3px 6px; color:#aebbd0; font-weight:700; text-align:left; }
-        QToolButton#sectionHeading:hover { color:#eef4fb; }
-        QToolButton#sectionHeading:focus { border-color:#83c9ff; }
+        QToolButton#sectionHeading, QToolButton#sectionHeading:hover, QToolButton#sectionHeading:focus { background:transparent; border:none; padding:0; }
         QProgressBar { background:#0f141b; color:#ffffff; border:1px solid #536176; border-radius:5px; text-align:center; }
         QProgressBar::chunk { background:#166699; border-radius:4px; }
         QCheckBox { spacing:7px; }

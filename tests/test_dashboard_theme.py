@@ -152,6 +152,16 @@ class DashboardThemeTests(unittest.TestCase):
                     if qa:
                         self.app.processEvents()
                         operator.results_box.grab().save(str(Path(qa) / "results-collapsed.png"))
+                    operator.manual_section.toggle.setFocus(Qt.TabFocusReason)
+                    self.app.processEvents()
+                    heading = operator.manual_section.toggle.grab().toImage()
+                    colours = {heading.pixelColor(x, y).name()
+                               for x in range(heading.width()) for y in range(heading.height())}
+                    self.assertNotIn("#83c9ff", colours)  # No blue focus rectangle.
+                    self.assertNotIn("#151a22", colours)  # No grey button background.
+                    if qa:
+                        operator.results_box.grab().save(str(Path(qa) / "results-focused.png"))
+                        operator.grab().save(str(Path(qa) / "dashboard-focused.png"))
                     self.assertTrue(all(not group.isEnabled() for group in operator.manual_data_groups))
                 finally:
                     operator.close()
