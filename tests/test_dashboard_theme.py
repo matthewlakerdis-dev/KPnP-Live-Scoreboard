@@ -8,7 +8,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from PySide6.QtGui import QColor, QFontDatabase, QPalette
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel,
                               QLineEdit, QListView, QPushButton, QSpinBox,
                               QVBoxLayout, QWidget)
@@ -119,6 +120,20 @@ class DashboardThemeTests(unittest.TestCase):
                         self.assertTrue(operator.results_box.isAncestorOf(group))
                     self.assertTrue(operator.listener_box.isAncestorOf(operator.event_log))
                     self.assertLessEqual(operator.results_box.width(), operator.dashboard_scroll.viewport().width())
+                    match = operator.manual_data_groups[-1]
+                    match_bottom = match.mapTo(operator.results_box, match.rect().bottomLeft()).y()
+                    self.assertGreaterEqual(operator.results_box.height() - match_bottom, 24)
+                    expanded_height = operator.results_box.height()
+                    operator.manual_section.toggle.click()
+                    self.app.processEvents()
+                    self.assertFalse(operator.manual_section.content.isVisible())
+                    self.assertTrue(operator.manual_section.toggle.isVisible())
+                    self.assertEqual(operator.manual_section.toggle.arrowType(), Qt.RightArrow)
+                    self.assertLess(operator.results_box.height(), expanded_height)
+                    QTest.keyClick(operator.manual_section.toggle, Qt.Key_Space)
+                    self.app.processEvents()
+                    self.assertTrue(operator.manual_section.content.isVisible())
+                    self.assertEqual(operator.manual_section.toggle.arrowType(), Qt.DownArrow)
                     operator.event_log.setPlainText("Listener test")
                     buttons = {b.text(): b for b in operator.listener_box.findChildren(QPushButton)}
                     buttons["Copy all"].click()
@@ -132,7 +147,11 @@ class DashboardThemeTests(unittest.TestCase):
                         operator.listener_box.grab().save(str(Path(qa) / "listener.png"))
                     operator.source_mode.setCurrentIndex(0)
                     self.assertFalse(operator.manual_section.toggle.isChecked())
-                    self.assertTrue(operator.results_box.isHidden() or not operator.results_box.isVisible())
+                    self.assertFalse(operator.manual_section.content.isVisible())
+                    self.assertTrue(operator.manual_section.toggle.isVisible())
+                    if qa:
+                        self.app.processEvents()
+                        operator.results_box.grab().save(str(Path(qa) / "results-collapsed.png"))
                     self.assertTrue(all(not group.isEnabled() for group in operator.manual_data_groups))
                 finally:
                     operator.close()
