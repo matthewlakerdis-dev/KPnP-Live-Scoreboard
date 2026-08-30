@@ -482,28 +482,26 @@ class CollapsibleSection(QWidget):
 
 class Operator(QMainWindow):
     def __init__(self,state,board):
-        super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(720,860); self.setMinimumWidth(680)
+        super().__init__(); self.state=state; self.board=board; self.setWindowTitle(f"KPNP Scoreboard v{APP_VERSION} — Operator"); self.resize(640,860); self.setMinimumWidth(600)
         self.setObjectName("operatorWindow")
         self.setWindowIcon(QIcon(str(asset_path("app.ico"))))
         self.listener=KPNPListener(self); self.simulator=KPNPEquipmentSimulator(self); self.simulator.packet.connect(self.listener.feed); self.listener.packet.connect(self.apply_packet); self.listener.status.connect(self.listener_status)
         self.settings=QSettings("KPNP Scoreboard","Live Scoreboard v3")
         self.updater=UpdateManager(self)
         self.dashboard_scroll=QScrollArea(); self.dashboard_scroll.setObjectName("dashboardScroll"); self.dashboard_scroll.setWidgetResizable(True); self.dashboard_scroll.setFrameShape(QFrame.NoFrame); self.dashboard_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff); self.setCentralWidget(self.dashboard_scroll)
-        root=QWidget(); root.setObjectName("dashboardPage"); self.dashboard_scroll.setWidget(root); outer=QVBoxLayout(root); outer.setContentsMargins(16,16,16,18); outer.setSpacing(12)
-        header=QFrame(); header.setObjectName("appHeader"); header_layout=QHBoxLayout(header); header_layout.setContentsMargins(16,12,16,12)
-        logo=QLabel(); logo.setPixmap(QIcon(str(asset_path("app.ico"))).pixmap(42,42)); logo.setFixedSize(46,46)
-        heading=QVBoxLayout(); title=QLabel("KPNP Live Scoreboard"); title.setObjectName("appTitle"); subtitle=QLabel("Broadcast control centre"); subtitle.setObjectName("appSubtitle"); heading.addWidget(title); heading.addWidget(subtitle)
-        version=QLabel(f"VERSION {APP_VERSION}"); version.setObjectName("versionBadge")
-        header_layout.addWidget(logo); header_layout.addLayout(heading); header_layout.addStretch(); header_layout.addWidget(version); outer.addWidget(header)
+        root=QWidget(); root.setObjectName("dashboardPage"); self.dashboard_scroll.setWidget(root); outer=QVBoxLayout(root); outer.setContentsMargins(12,12,12,14); outer.setSpacing(8)
         outer.addWidget(self.connection_group())
         outer.addWidget(self.update_group())
-        output_card=QGroupBox("Broadcast output"); top=QGridLayout(output_card); show=QPushButton("Show output"); show.setObjectName("primaryButton"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move to screen"); move.clicked.connect(self.move_output)
-        top.addWidget(show,0,0); top.addWidget(borderless,0,1)
-        top.addWidget(QLabel("Design"),1,0); top.addWidget(self.design,1,1)
-        top.addWidget(QLabel("Output screen"),2,0); top.addWidget(self.screen,2,1)
-        top.addWidget(move,3,0,1,2); top.setColumnStretch(1,1); outer.addWidget(output_card)
+        output_card=QGroupBox("Output"); top=QGridLayout(output_card)
+        self.show_output_button=QPushButton("Show output"); self.show_output_button.setObjectName("primaryButton"); self.show_output_button.clicked.connect(self.toggle_output)
+        borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(self.toggle_borderless_output)
+        self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed)
+        self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output"); move.clicked.connect(self.move_output)
+        top.addWidget(self.show_output_button,0,0); top.addWidget(QLabel("Output screen"),0,1); top.addWidget(self.screen,0,2,1,2)
+        top.addWidget(borderless,1,0); top.addWidget(move,1,1); top.addWidget(QLabel("Design"),1,2); top.addWidget(self.design,1,3)
+        top.setColumnStretch(3,1); outer.addWidget(output_card)
         self.manual_data_groups=[]
-        self.manual_section=CollapsibleSection("Manual scoreboard controls"); outer.addWidget(self.manual_section)
+        self.manual_section=CollapsibleSection("Scoreboard controls"); outer.addWidget(self.manual_section)
         self.manual_section.toggle.toggled.connect(lambda _:self.save_settings())
         sides=QVBoxLayout(); sides.setSpacing(8); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); self.manual_section.content_layout.addLayout(sides)
         match=QGroupBox("Match"); grid=QGridLayout(match)
@@ -525,6 +523,7 @@ class Operator(QMainWindow):
         outer.addWidget(QLabel("The virtual equipment uses the same event listener boundary as future real KPNP hardware."))
         self.clock_timer=QTimer(self); self.clock_timer.timeout.connect(self.clock_step); self.clock_timer.start(1000)
         self.anim=QTimer(self); self.anim.timeout.connect(self.anim_step); self.anim.start(33)
+        self.output_ui_timer=QTimer(self); self.output_ui_timer.timeout.connect(self.sync_output_button); self.output_ui_timer.start(500)
         self.restore_settings()
         QTimer.singleShot(0,lambda:self.dashboard_scroll.verticalScrollBar().setValue(0))
         QTimer.singleShot(150,lambda:self.dashboard_scroll.verticalScrollBar().setValue(0))
@@ -538,8 +537,8 @@ class Operator(QMainWindow):
         self.check_update=QPushButton("Check for updates"); self.check_update.setObjectName("primaryButton"); self.check_update.setMinimumHeight(32); self.check_update.clicked.connect(self.check_for_updates)
         self.install_update=QPushButton("Download update"); self.install_update.setEnabled(False); self.install_update.clicked.connect(self.download_update)
         self.update_progress=QProgressBar(); self.update_progress.setRange(0,100); self.update_progress.setVisible(False)
-        grid.addWidget(self.update_status,0,0,1,2); grid.addWidget(self.auto_updates,1,0,1,2)
-        grid.addWidget(self.check_update,2,0); grid.addWidget(self.install_update,2,1); grid.addWidget(self.update_progress,3,0,1,2)
+        grid.addWidget(self.update_status,0,0); grid.addWidget(self.check_update,0,1); grid.addWidget(self.install_update,0,2)
+        grid.addWidget(self.auto_updates,1,0,1,3); grid.addWidget(self.update_progress,2,0,1,3); grid.setColumnStretch(0,1)
         self.updater.status.connect(self.update_status.setText)
         self.updater.current.connect(self.update_current)
         self.updater.available.connect(self.update_available)
@@ -588,18 +587,16 @@ class Operator(QMainWindow):
         self.finish_update_check(); self.update_status.setText(message); self.install_update.setEnabled(bool(self.updater.asset)); self.update_progress.setVisible(False)
 
     def connection_group(self):
-        box=QGroupBox("KPNP connection"); grid=QGridLayout(box)
+        box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
         self.source_mode=QComboBox(); self.source_mode.addItems(("Live KPNP application","Virtual KPNP equipment")); self.source_mode.currentIndexChanged.connect(self.source_changed)
         self.transport=QComboBox(); self.transport.addItems(("Auto detect","UDP","TCP","Serial / COM"))
         self.host=QLineEdit("0.0.0.0"); self.port=QSpinBox(); self.port.setRange(1,65535); self.port.setValue(8056)
         self.connect_button=QPushButton("Start live listener"); self.connect_button.setObjectName("primaryButton"); self.connect_button.clicked.connect(self.start_source)
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
         self.connection_status.setWordWrap(True)
-        grid.addWidget(QLabel("Data source"),0,0); grid.addWidget(self.source_mode,0,1)
-        grid.addWidget(QLabel("Transport"),1,0); grid.addWidget(self.transport,1,1)
-        grid.addWidget(QLabel("Host / interface"),2,0); grid.addWidget(self.host,2,1)
-        grid.addWidget(QLabel("Port"),3,0); grid.addWidget(self.port,3,1)
-        grid.addWidget(self.connect_button,4,0,1,2); grid.addWidget(self.connection_status,5,0,1,2); grid.setColumnStretch(1,1); return box
+        grid.addWidget(QLabel("Source"),0,0); grid.addWidget(self.source_mode,0,1); grid.addWidget(QLabel("Host"),0,2); grid.addWidget(self.host,0,3)
+        grid.addWidget(QLabel("Protocol"),1,0); grid.addWidget(self.transport,1,1); grid.addWidget(QLabel("Port"),1,2); grid.addWidget(self.port,1,3)
+        grid.addWidget(self.connect_button,2,0,1,2); grid.addWidget(self.connection_status,2,2,1,2); grid.setColumnStretch(1,1); grid.setColumnStretch(3,1); return box
 
     def restore_settings(self):
         self.source_mode.setCurrentIndex(self.settings.value("source",0,int)); self.transport.setCurrentIndex(self.settings.value("transport",0,int)); self.host.setText(self.settings.value("host","0.0.0.0")); self.port.setValue(self.settings.value("port",8056,int)); self.design.setCurrentText(self.settings.value("design","Original")); self.screen.setCurrentIndex(min(self.settings.value("screen",0,int),max(0,self.screen.count()-1))); self.auto_updates.setChecked(self.settings.value("auto_updates",True,bool)); self.manual_section.set_expanded(self.settings.value("manual_controls_expanded",True,bool)); self.design_changed(self.design.currentText()); self.source_changed(self.source_mode.currentIndex())
@@ -654,7 +651,18 @@ class Operator(QMainWindow):
     def move_output(self):
         screens=QApplication.screens(); index=self.screen.currentIndex()
         if 0<=index<len(screens):
-            self.board.showNormal(); self.board.move(screens[index].availableGeometry().topLeft()); self.board.show(); self.board.raise_(); self.save_settings()
+            self.board.showNormal(); self.board.move(screens[index].availableGeometry().topLeft()); self.board.show(); self.board.raise_(); self.sync_output_button(); self.save_settings()
+
+    def toggle_output(self):
+        if self.board.isVisible(): self.board.hide()
+        else: self.show_output()
+        self.sync_output_button()
+
+    def toggle_borderless_output(self):
+        self.board.toggle_borderless(); self.sync_output_button()
+
+    def sync_output_button(self):
+        self.show_output_button.setText("Hide output" if self.board.isVisible() else "Show output")
 
     def side_group(self,title,side):
         box=QGroupBox(title); form=QFormLayout(box)
@@ -736,7 +744,7 @@ class Operator(QMainWindow):
         elif event=="connection": self.sim_connected.blockSignals(True); self.sim_connected.setChecked(bool(packet.get("connected"))); self.sim_connected.blockSignals(False)
         if hasattr(self,"event_log"):
             self.event_log.append(json.dumps(packet,separators=(",",":")))
-    def show_output(self): self.board.show(); self.board.raise_(); self.board.activateWindow()
+    def show_output(self): self.board.show(); self.board.raise_(); self.board.activateWindow(); self.sync_output_button()
 
 
 def main():
