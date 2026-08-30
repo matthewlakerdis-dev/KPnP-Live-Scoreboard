@@ -633,7 +633,7 @@ class Operator(QMainWindow):
         self.connection_status=QLabel("Not connected"); self.connection_status.setObjectName("connectionStatus"); self.connection_status.setStyleSheet("color:#f5c451;font-weight:700")
         self.connection_status.setWordWrap(False); self.connection_status.setMinimumWidth(190)
         host_hint=QLabel("IP address of the KPnP/Daedo machine"); host_hint.setObjectName("fieldHint")
-        grid.addWidget(host_hint,0,2,1,2)
+        grid.addWidget(host_hint,0,3)
         grid.addWidget(QLabel("Source"),1,0); grid.addWidget(self.source_mode,1,1); grid.addWidget(QLabel("Host"),1,2); grid.addWidget(self.host,1,3)
         grid.addWidget(QLabel("Protocol"),2,0); grid.addWidget(self.transport,2,1); grid.addWidget(QLabel("Port"),2,2); grid.addWidget(self.port,2,3)
         connection_row=QHBoxLayout(); connection_row.setSpacing(8); connection_row.addStretch(1); connection_row.addWidget(self.connect_button); connection_row.addWidget(self.connection_status); connection_row.addStretch(1)
