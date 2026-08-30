@@ -6,7 +6,7 @@ Native PySide6 Windows scoreboard with a separate broadcast output and operator 
 
 Run `installer-output\KPNP-Live-Scoreboard-v3-Setup.exe`. The installer creates Start Menu and optional desktop shortcuts. Python is not required on the destination computer.
 
-Version 3.6 adds verified in-app updates from this repository's GitHub Releases. The first update-enabled version must be installed normally. Later releases can be downloaded and installed from the **Application updates** section of the operator dashboard.
+Version 3.6 adds verified in-app updates from this repository's GitHub Releases. The first update-enabled version must be installed normally. Later releases can be checked, downloaded and installed from the clearly visible **Application updates** section near the top of the operator dashboard.
 
 The setup dashboard remembers the selected Live/Virtual source, transport, host, port and output monitor. Live KPNP mode is reserved for the real protocol decoder once genuine KPNP traffic has been captured; Virtual Equipment mode is fully operational now.
 

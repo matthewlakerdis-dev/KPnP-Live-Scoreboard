@@ -472,6 +472,7 @@ class Operator(QMainWindow):
         self.updater=UpdateManager(self)
         root=QWidget(); self.setCentralWidget(root); outer=QVBoxLayout(root)
         outer.addWidget(self.connection_group())
+        outer.addWidget(self.update_group())
         top=QHBoxLayout(); show=QPushButton("Show output"); show.clicked.connect(self.show_output); borderless=QPushButton("Toggle borderless"); borderless.clicked.connect(board.toggle_borderless); self.design=QComboBox(); self.design.addItems(("Original","Modern","Arena","Flat Strip","Rounded Cards","Minimal Broadcast","Wing Compact")); self.design.currentTextChanged.connect(self.design_changed); self.screen=QComboBox(); self.screen.addItems([s.name() for s in QApplication.screens()]); move=QPushButton("Move output to screen"); move.clicked.connect(self.move_output); top.addWidget(show); top.addWidget(borderless); top.addWidget(QLabel("Design")); top.addWidget(self.design); top.addWidget(QLabel("Output screen")); top.addWidget(self.screen); top.addWidget(move); outer.addLayout(top)
         self.manual_data_groups=[]
         sides=QHBoxLayout(); sides.addWidget(self.side_group("Blue",state.blue)); sides.addWidget(self.side_group("Red",state.red)); outer.addLayout(sides)
@@ -491,18 +492,17 @@ class Operator(QMainWindow):
         log_header.addWidget(clear_log); log_header.addWidget(copy_log); outer.addLayout(log_header)
         self.event_log=QTextEdit(); self.event_log.setReadOnly(True); self.event_log.setMaximumHeight(145); self.event_log.setPlaceholderText("Virtual and real KPNP events appear here…"); outer.addWidget(self.event_log)
         outer.addWidget(QLabel("The virtual equipment uses the same event listener boundary as future real KPNP hardware."))
-        outer.addWidget(self.update_group())
         self.clock_timer=QTimer(self); self.clock_timer.timeout.connect(self.clock_step); self.clock_timer.start(1000)
         self.anim=QTimer(self); self.anim.timeout.connect(self.anim_step); self.anim.start(33)
         self.restore_settings()
-        QTimer.singleShot(2500,lambda:self.updater.check() if self.auto_updates.isChecked() else None)
+        QTimer.singleShot(2500,lambda:self.check_for_updates() if self.auto_updates.isChecked() else None)
 
     def update_group(self):
         box=QGroupBox("Application updates"); grid=QGridLayout(box)
         self.update_status=QLabel(f"Installed version: {APP_VERSION}")
         self.auto_updates=QCheckBox("Check automatically at startup"); self.auto_updates.setChecked(True)
         self.auto_updates.toggled.connect(lambda checked:self.settings.setValue("auto_updates",checked))
-        self.check_update=QPushButton("Check for updates"); self.check_update.clicked.connect(self.updater.check)
+        self.check_update=QPushButton("Check for updates"); self.check_update.setMinimumHeight(32); self.check_update.clicked.connect(self.check_for_updates)
         self.install_update=QPushButton("Download update"); self.install_update.setEnabled(False); self.install_update.clicked.connect(self.download_update)
         self.update_progress=QProgressBar(); self.update_progress.setRange(0,100); self.update_progress.setVisible(False)
         grid.addWidget(self.update_status,0,0,1,2); grid.addWidget(self.auto_updates,0,2)
@@ -515,10 +515,20 @@ class Operator(QMainWindow):
         self.updater.failed.connect(self.update_failed)
         return box
 
+    def check_for_updates(self):
+        self.check_update.setEnabled(False)
+        self.check_update.setText("Checking…")
+        self.updater.check()
+
+    def finish_update_check(self):
+        self.check_update.setEnabled(True)
+        self.check_update.setText("Check for updates")
+
     def update_current(self,message):
-        self.update_status.setText(message); self.install_update.setEnabled(False); self.update_progress.setVisible(False)
+        self.finish_update_check(); self.update_status.setText(message); self.install_update.setEnabled(False); self.update_progress.setVisible(False)
 
     def update_available(self,version,notes):
+        self.finish_update_check()
         self.update_status.setText(f"Version {version} is available")
         self.install_update.setText(f"Download {version}"); self.install_update.setEnabled(True)
         self.install_update.setToolTip(notes[:1000])
@@ -542,7 +552,7 @@ class Operator(QMainWindow):
             self.install_update.clicked.connect(self.updater.install)
 
     def update_failed(self,message):
-        self.update_status.setText(message); self.install_update.setEnabled(bool(self.updater.asset)); self.update_progress.setVisible(False)
+        self.finish_update_check(); self.update_status.setText(message); self.install_update.setEnabled(bool(self.updater.asset)); self.update_progress.setVisible(False)
 
     def connection_group(self):
         box=QGroupBox("Setup dashboard"); grid=QGridLayout(box)
