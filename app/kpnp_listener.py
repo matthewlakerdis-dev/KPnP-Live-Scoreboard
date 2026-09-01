@@ -47,6 +47,7 @@ class KPNPListener(QObject):
         self._thread = None
         self._peer = None
         self._current_round = None
+        self._scores = {"blue": 0, "red": 0}
         data_root = Path(os.environ.get("APPDATA", Path.home())) / "KPNP Scoreboard"
         data_root.mkdir(parents=True, exist_ok=True)
         self.capture_path = data_root / self.capture_filename
@@ -167,6 +168,7 @@ class KPNPListener(QObject):
         command = parts[0].lower() if parts else ""
         if command == "pre" and len(parts) > 1 and parts[1].lower() == "fightloaded":
             self._current_round = 1
+            self._scores = {"blue": 0, "red": 0}
             self.packet.emit({
                 "event": "state", "blue_score": 0, "red_score": 0,
                 "blue_gamjeom": 0, "red_gamjeom": 0,
@@ -231,11 +233,25 @@ class KPNPListener(QObject):
                 "blue_rounds": sum(value in blue_values for value in winners),
                 "red_rounds": sum(value in red_values for value in winners),
             })
+        elif command.startswith("s1") and "s21" in parts:
+            # KPNP's round-state packet carries the visible scores in s12/s22.
+            # It is sent before sc1/sc2 and is useful when that later packet is
+            # lost on the network.
+            fields = {parts[index].lower(): parts[index + 1]
+                      for index in range(0, len(parts) - 1, 2)}
+            try:
+                self._scores.update(blue=int(fields["s12"]), red=int(fields["s22"]))
+                self.packet.emit({"event": "state",
+                                  "blue_score": self._scores["blue"],
+                                  "red_score": self._scores["red"]})
+            except (KeyError, ValueError):
+                pass
         elif command == "sc1" and "sc2" in parts:
             split = parts.index("sc2")
             try:
                 blue_score = int(parts[1])
                 red_score = int(parts[split + 1])
+                self._scores.update(blue=blue_score, red=red_score)
                 self.packet.emit({"event": "state", "blue_score": blue_score, "red_score": red_score})
             except (ValueError, IndexError):
                 pass
@@ -248,22 +264,66 @@ class KPNPListener(QObject):
             except (ValueError, IndexError):
                 pass
         elif command == "clk" and len(parts) > 1:
-            try:
-                minutes, seconds = (int(value) for value in parts[1].split(":", 1))
-                update = {"event": "state", "seconds": minutes * 60 + seconds}
-                if len(parts) > 2 and parts[2].lower() in ("start", "stop"):
-                    update["running"] = parts[2].lower() == "start"
-                    if parts[2].lower() == "start": update["timeout_active"] = False
-                if len(parts) > 2 and parts[2].lower() in ("break", "rest", "timeout", "time out"):
-                    update.update(running=False, timeout_active=True)
+            clock_seconds = self._clock_seconds(parts[1])
+            if clock_seconds is not None:
+                try:
+                    action = parts[2].lower() if len(parts) > 2 else ""
+                    update = {"event": "state", "seconds": clock_seconds}
+                    if action == "start":
+                        update.update(running=True, timeout_active=False)
+                    elif action.startswith("stop"):
+                        update["running"] = False
+                    elif action in ("break", "rest", "timeout", "time out"):
+                        update.update(running=False, timeout_active=True)
+                    self.packet.emit(update)
+                except (ValueError, TypeError):
+                    pass
+        elif command == "ij0" and len(parts) > 1:
+            # Intermission/inspection clock shown by TKDScoring. It uses
+            # show/hide messages around otherwise ordinary timer ticks.
+            action = parts[2].lower() if len(parts) > 2 else ""
+            if action == "hide":
+                self.packet.emit({"event": "state", "running": False,
+                                  "timeout_active": False})
+            else:
+                clock_seconds = self._clock_seconds(parts[1])
+                update = {"event": "state", "running": False,
+                          "timeout_active": True}
+                if clock_seconds is not None:
+                    update["seconds"] = clock_seconds
                 self.packet.emit(update)
-            except (ValueError, TypeError):
+        elif command in ("hl1", "hl2") and len(parts) > 1:
+            # Electronic protector hit level: side 1 is blue, side 2 is red.
+            try:
+                strength = max(0, min(100, int(float(parts[1]))))
+                self.packet.emit({"event": "pss_hit",
+                                  "side": "blue" if command == "hl1" else "red",
+                                  "strength": strength})
+            except ValueError:
                 pass
+        elif command in ("pt1", "pt2") and len(parts) > 1:
+            # Point-award packets precede the full score snapshot. Apply the
+            # delta immediately; s11/sc1 will reconcile it moments later.
+            try:
+                delta = int(parts[1])
+                side = "blue" if command == "pt1" else "red"
+                self._scores[side] = max(0, self._scores[side] + delta)
+                self.packet.emit({"event": "score", "side": side,
+                                  "delta": delta})
+            except ValueError:
+                pass
+        elif command in ("rst", "rsr"):
+            # Round-reset control packets clear any held PSS reading. Scores
+            # remain visible until rnd announces the next round.
+            self.packet.emit({"event": "state", "blue_pss": 0.0,
+                              "red_pss": 0.0, "blue_peak": 0.0,
+                              "red_peak": 0.0})
         elif command == "rnd" and len(parts) > 1:
             try:
                 round_number = max(1, min(3, int(parts[1])))
                 update = {"event": "state", "round": round_number, "timeout_active": False}
                 if self._current_round is not None and round_number != self._current_round:
+                    self._scores = {"blue": 0, "red": 0}
                     update.update(
                         blue_score=0, red_score=0,
                         blue_gamjeom=0, red_gamjeom=0,
@@ -308,6 +368,19 @@ class KPNPListener(QObject):
             except OSError:
                 pass
         self.status.emit(f"{self.program_name} listener stopped")
+
+    @staticmethod
+    def _clock_seconds(value):
+        """Parse KPNP clocks, including its stop-end `0.00` spelling."""
+        text = str(value).strip()
+        separator = ":" if ":" in text else "." if "." in text else None
+        if separator is None:
+            return None
+        try:
+            minutes, seconds = (int(piece) for piece in text.split(separator, 1))
+            return max(0, minutes * 60 + seconds)
+        except (TypeError, ValueError):
+            return None
 
     def feed(self, packet):
         """Accept a normalized packet from virtual equipment or a decoder."""
